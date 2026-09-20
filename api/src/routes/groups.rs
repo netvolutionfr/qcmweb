@@ -269,7 +269,11 @@ async fn create_participants(
     let expires_at = school_year::expiry(&year).map_err(AppError::BadRequest)?;
 
     let secrets: Vec<String> = (0..body.count).map(|_| code::participant_secret()).collect();
-    let hashes = hash_all(secrets.clone()).await?;
+
+    // On hache la forme canonique, pas la forme affichée : l'élève saisira son
+    // secret avec ou sans tiret, en majuscules ou non, et les deux doivent
+    // aboutir au même hachage (ADR-0007).
+    let hashes = hash_all(secrets.iter().map(|s| code::normalize(s)).collect()).await?;
 
     let mut issued = Vec::with_capacity(secrets.len());
     for (secret, hash) in secrets.into_iter().zip(hashes) {
@@ -304,7 +308,7 @@ async fn reset_secret(
     Path(id): Path<Uuid>,
 ) -> Result<Json<IssuedParticipant>, AppError> {
     let secret = code::participant_secret();
-    let hash = hash_all(vec![secret.clone()]).await?.remove(0);
+    let hash = hash_all(vec![code::normalize(&secret)]).await?.remove(0);
 
     let (token,) = sqlx::query_as::<_, (String,)>(
         "UPDATE participants SET secret_hash = $2 WHERE id = $1 RETURNING token",

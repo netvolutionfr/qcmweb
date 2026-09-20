@@ -35,3 +35,4 @@ sans alternative sérieuse, ou une décision déjà argumentée dans [SPEC.md](.
 | [0009](0009-stack-frontend.md) | Next.js, Tailwind, shadcn/ui, thème système sans JavaScript | Acceptée |
 | [0010](0010-versions-de-sujet-immuables.md) | Versions de sujet immuables, états répartis, import unique | Acceptée |
 | [0011](0011-ouverture-et-fenetre.md) | Ouverture manuelle *et* fenêtre planifiée, code dès la création | Acceptée |
+| [0012](0012-tentatives.md) | Tentatives : fuite impossible à écrire, mélange déterministe | Acceptée |

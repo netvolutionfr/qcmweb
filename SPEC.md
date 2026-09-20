@@ -1134,9 +1134,8 @@ GET    /api/assessments/{id}
 POST   /api/assessments/{id}/open           enseignant seul
 POST   /api/assessments/{id}/close          enseignant seul
 
-POST   /api/join/{code}
-
-POST   /api/attempts/{id}/start
+POST   /api/join/{code}                     consignes, si le groupe correspond
+POST   /api/assessments/{id}/attempts       démarre ou reprend une tentative
 PUT    /api/attempts/{id}/answers/{questionId}
 POST   /api/attempts/{id}/submit
 

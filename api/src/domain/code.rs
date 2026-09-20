@@ -71,7 +71,11 @@ pub fn assessment_code() -> String {
     code(6)
 }
 
-/// Ramène une saisie à sa forme canonique.
+/// Ramène un code à sa **forme canonique** : majuscules, sans séparateur.
+///
+/// C'est cette forme qui est hachée et comparée, jamais la forme affichée. Le
+/// tiret n'existe que pour la lisibilité du billet papier ; hacher la forme
+/// affichée rendrait toute saisie normalisée invalide.
 ///
 /// Un élève tape en minuscules, oublie le tiret, en ajoute un au mauvais
 /// endroit, ou colle une espace insécable. Refuser ces saisies serait une
@@ -139,6 +143,18 @@ mod tests {
             let ecart = (*n as f64 - attendu).abs() / attendu;
             assert!(ecart < 0.15, "`{c}` tiré {n} fois, attendu ~{attendu:.0}");
         }
+    }
+
+    #[test]
+    fn la_forme_affichee_et_la_forme_canonique_correspondent() {
+        let secret = participant_secret();
+        assert!(secret.contains('-'), "forme affichée : {secret}");
+        assert_eq!(
+            normalize(&secret).len(),
+            10,
+            "la forme canonique perd le tiret, pas les caractères"
+        );
+        assert_eq!(normalize(&secret), normalize(&secret.to_lowercase()));
     }
 
     #[test]

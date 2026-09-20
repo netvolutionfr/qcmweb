@@ -119,6 +119,14 @@ impl Question {
         }
     }
 
+    pub fn prompt(&self) -> &str {
+        match self {
+            Question::SingleChoice(q) => &q.prompt,
+            Question::MultipleChoice(q) => &q.prompt,
+            Question::TrueFalse(q) => &q.prompt,
+        }
+    }
+
     pub fn points(&self) -> f64 {
         match self {
             Question::SingleChoice(q) => q.points,

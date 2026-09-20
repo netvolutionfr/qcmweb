@@ -21,6 +21,7 @@ use axum::http::request::Parts;
 use rand::Rng;
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use crate::error::AppError;
 use crate::state::AppState;
@@ -159,11 +160,15 @@ impl FromRequestParts<AppState> for Teacher {
     ) -> Result<Self, Self::Rejection> {
         let token = session_cookie(parts).ok_or(AppError::Unauthorized)?;
 
-        let valid: Option<(uuid::Uuid,)> =
-            sqlx::query_as("SELECT id FROM sessions WHERE token_hash = $1 AND expires_at > now()")
-                .bind(fingerprint(&token))
-                .fetch_optional(&state.db)
-                .await?;
+        // `participant_id IS NULL` n'est pas un détail : sans cette clause, la
+        // session d'un élève ouvrirait les routes enseignantes.
+        let valid: Option<(uuid::Uuid,)> = sqlx::query_as(
+            "SELECT id FROM sessions
+              WHERE token_hash = $1 AND expires_at > now() AND participant_id IS NULL",
+        )
+        .bind(fingerprint(&token))
+        .fetch_optional(&state.db)
+        .await?;
 
         valid.map(|_| Teacher).ok_or(AppError::Unauthorized)
     }
@@ -201,6 +206,55 @@ impl FromRequestParts<AppState> for Agent {
             .await;
 
         Ok(Agent { scope })
+    }
+}
+
+/// Session ouverte pour un participant.
+pub async fn open_participant_session(db: &PgPool, participant: Uuid) -> Result<String, AppError> {
+    let token = random_secret();
+    sqlx::query("INSERT INTO sessions (token_hash, expires_at, participant_id) VALUES ($1, $2, $3)")
+        .bind(fingerprint(&token))
+        .bind(time::OffsetDateTime::now_utc() + SESSION_TTL)
+        .bind(participant)
+        .execute(db)
+        .await?;
+    Ok(token)
+}
+
+/// Preuve qu'une requête émane d'un élève authentifié.
+///
+/// Porte l'identifiant du participant et celui de son groupe : toute
+/// vérification d'appartenance part de là, jamais d'un champ fourni par le
+/// client (SPEC §17).
+pub struct Participant {
+    pub id: Uuid,
+    pub group_id: Uuid,
+}
+
+impl FromRequestParts<AppState> for Participant {
+    type Rejection = AppError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let token = session_cookie(parts).ok_or(AppError::Unauthorized)?;
+
+        let row: Option<(Uuid, Uuid)> = sqlx::query_as(
+            "SELECT p.id, p.group_id
+               FROM sessions s
+               JOIN participants p ON p.id = s.participant_id
+              WHERE s.token_hash = $1
+                AND s.expires_at > now()
+                AND p.active
+                AND p.expires_at > now()",
+        )
+        .bind(fingerprint(&token))
+        .fetch_optional(&state.db)
+        .await?;
+
+        row.map(|(id, group_id)| Participant { id, group_id })
+            .ok_or(AppError::Unauthorized)
     }
 }
 

@@ -1,5 +1,6 @@
 pub mod assessments;
 pub mod auth;
+pub mod exam;
 pub mod groups;
 pub mod health;
 pub mod subjects;
@@ -47,6 +48,7 @@ use crate::state::AppState;
         (name = "groupes", description = "Groupes et jetons de participation"),
         (name = "sujets", description = "Banque de sujets et versions"),
         (name = "evaluations", description = "Évaluations et codes d'accès"),
+        (name = "eleve", description = "Parcours élève : code, composition, remise"),
         (name = "systeme", description = "Supervision"),
     ),
 )]
@@ -56,6 +58,7 @@ pub fn router(state: AppState) -> Router {
     let (router, openapi) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .merge(assessments::router())
         .merge(auth::router())
+        .merge(exam::router())
         .merge(groups::router())
         .merge(health::router())
         .merge(subjects::router())
