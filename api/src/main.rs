@@ -15,6 +15,11 @@ use crate::state::AppState;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Charge le .env de la racine du dépôt : dotenvy remonte l'arborescence,
+    // on peut donc lancer depuis api/ comme depuis la racine. Absent en
+    // production, où les variables viennent de l'environnement du conteneur.
+    let _ = dotenvy::dotenv();
+
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .init();

@@ -177,16 +177,22 @@ classement, texte à trous, correction manuelle, OIDC/LDAP/ENT.
 ## 7. Commandes
 
 ```bash
-docker compose up -d postgres   # Postgres, exposé sur le port hôte 5434
-cd api && cp .env.example .env  # une fois
+cp .env.example .env            # une fois, puis remplacer les valeurs
+docker compose up -d postgres   # Postgres, port hôte 5434 par défaut
 cd api && cargo run             # applique les migrations puis sert l'API
 cd api && cargo test            # tests backend
 curl localhost:3000/api/health  # vérifie API + base
 ```
 
+Un **seul `.env`, à la racine**, sert à la fois à l'interpolation Compose et à
+l'API : `dotenvy` remonte l'arborescence, on peut donc lancer depuis `api/`
+comme depuis la racine. Deux fichiers `.env` finiraient par diverger sur le mot
+de passe.
+
 Les migrations sont appliquées au démarrage par `sqlx::migrate!`, il n'y a donc
-pas d'étape manuelle. Le port hôte est 5434 parce que 5432 et 5433 sont déjà
-occupés par d'autres projets sur le poste de développement.
+pas d'étape manuelle. Le port hôte par défaut est 5434 parce que 5432 et 5433
+sont déjà occupés par d'autres projets sur le poste de développement ;
+`POSTGRES_PORT` permet d'en changer.
 
 Arborescence du backend :
 
@@ -218,6 +224,14 @@ jamais écrire à la main un type qui décrit une réponse d'API.
   d'authentification.
 - Les opérations sensibles (modification de note, recalcul, purge) écrivent un
   `AuditEvent`.
+- **Aucun secret dans un fichier versionné**, y compris un mot de passe de
+  développement sans valeur : c'est l'habitude qui protège, pas la sensibilité
+  du secret concerné. Les identifiants vivent dans `.env`, ignoré par git ;
+  `.env.example` ne contient que des valeurs de remplacement explicites.
+- `compose.yaml` (formalisme Compose V2, sans clé `version:`) n'écrit jamais un
+  identifiant en dur. Il interpole `${VAR:?message}` : une variable manquante
+  fait échouer la commande avec une consigne utile, plutôt que de démarrer sur
+  une valeur par défaut silencieuse.
 - Toute logique non triviale de correction ou de barème laisse un test derrière
   elle.
 
