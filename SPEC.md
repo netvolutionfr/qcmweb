@@ -252,7 +252,13 @@ navigateur. Elle n'est accessible ni à un agent, ni à aucun automate : c'est l
 porte de relecture humaine, et elle constitue à ce titre une garantie de
 sécurité autant qu'une garantie pédagogique.
 
-Lorsqu'un sujet validé est modifié, une **nouvelle version** est créée.
+Lorsqu'un sujet validé est modifié, une **nouvelle version** est créée. C'est
+le seul chemin de modification : une version déposée est immuable, garantie par
+un déclencheur en base et non par la seule discipline du code.
+
+`DRAFT` et `VALIDATED` qualifient une **version**, `ARCHIVED` qualifie le
+**sujet**. Un même sujet peut donc avoir une v1 validée et une v2 en cours de
+préparation. Voir [ADR-0010](docs/adr/0010-versions-de-sujet-immuables.md).
 
 Une évaluation référence toujours une version précise et immuable du sujet.
 
@@ -402,6 +408,9 @@ Les types suivants sont volontairement reportés à une version ultérieure :
 # 8. Import et export
 
 Le format `qcm/v1` constitue le format natif.
+
+YAML 1.2 étant un sur-ensemble de JSON, un **même point d'entrée accepte les
+deux** : le corps d'un dépôt est du texte brut, sans négociation de type.
 
 Des adaptateurs pourront importer d'autres formats.
 
@@ -1102,10 +1111,14 @@ POST   /api/participants/{id}/reset-secret
 POST   /api/participants/{id}/deactivate
 POST   /api/participants/{id}/move
 
-GET    /api/subjects
-POST   /api/subjects
-POST   /api/subjects/import
-GET    /api/subjects/{id}/versions
+GET    /api/subjects                        banque de sujets
+POST   /api/subjects                        dépose un document, toujours en DRAFT
+POST   /api/subjects/validate               analyse sans écrire
+GET    /api/subjects/{id}                   détail et versions
+POST   /api/subjects/{id}/versions          nouvelle version, en DRAFT
+GET    /api/subjects/{id}/versions/{n}      document complet
+POST   /api/subjects/{id}/versions/{n}/validate   DRAFT -> VALIDATED, enseignant seul
+POST   /api/subjects/{id}/archive           enseignant seul
 
 POST   /api/assessments
 GET    /api/assessments/{id}

@@ -8,14 +8,14 @@ use serde::{Deserialize, Serialize};
 
 pub const SCHEMA: &str = "qcm/v1";
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Document {
     pub schema: String,
     pub metadata: Metadata,
     pub questions: Vec<Question>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Metadata {
     pub title: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -29,7 +29,7 @@ pub struct Metadata {
 /// Un enum plutôt qu'un `kind: String` accompagné de champs optionnels : les
 /// états incohérents (un `true_false` porteur de propositions, un
 /// `single_choice` doté d'un mode de notation partielle) sont inexprimables.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Question {
     SingleChoice(SingleChoice),
@@ -37,7 +37,7 @@ pub enum Question {
     TrueFalse(TrueFalse),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct SingleChoice {
     pub id: String,
     pub prompt: String,
@@ -48,7 +48,7 @@ pub struct SingleChoice {
     pub teaching: Teaching,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct MultipleChoice {
     pub id: String,
     pub prompt: String,
@@ -61,7 +61,7 @@ pub struct MultipleChoice {
     pub teaching: Teaching,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct TrueFalse {
     pub id: String,
     pub prompt: String,
@@ -74,7 +74,7 @@ pub struct TrueFalse {
 
 /// Champs pédagogiques communs, jamais transmis au navigateur de l'élève tant
 /// que la configuration de l'évaluation n'en autorise pas la divulgation.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Teaching {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub explanation: Option<String>,
@@ -82,7 +82,7 @@ pub struct Teaching {
     pub objectives: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Choice {
     pub id: String,
     pub text: String,
@@ -90,7 +90,7 @@ pub struct Choice {
     pub correct: bool,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Mode {
     /// Le point n'est obtenu que si l'ensemble exact des réponses est coché.
@@ -100,7 +100,7 @@ pub enum Mode {
     Partial,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Scoring {
     #[serde(default)]
     pub mode: Mode,
@@ -136,7 +136,7 @@ impl Question {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ValidationError {
     /// Chemin dans le document, par exemple `questions[2].choices[1].id`.
     pub path: String,

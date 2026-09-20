@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod groups;
 pub mod health;
+pub mod subjects;
 
 use axum::response::IntoResponse;
 use axum::routing::get;
@@ -24,9 +25,26 @@ use crate::state::AppState;
                        les participants y sont désignés par un jeton.",
         license(name = "MIT"),
     ),
+    // Le modèle qcm/v1 est déclaré explicitement : aucune route ne le référence
+    // dans sa signature, puisque les documents transitent en texte brut. Sans
+    // cela il serait absent de l'OpenAPI, alors que c'est par là qu'un agent
+    // obtient le schéma exigé par la SPEC §9.
+    components(schemas(
+        crate::domain::qcm::Document,
+        crate::domain::qcm::Question,
+        crate::domain::qcm::SingleChoice,
+        crate::domain::qcm::MultipleChoice,
+        crate::domain::qcm::TrueFalse,
+        crate::domain::qcm::Choice,
+        crate::domain::qcm::Metadata,
+        crate::domain::qcm::Teaching,
+        crate::domain::qcm::Scoring,
+        crate::domain::qcm::Mode,
+    )),
     tags(
         (name = "authentification", description = "Session enseignant et clés d'agent"),
         (name = "groupes", description = "Groupes et jetons de participation"),
+        (name = "sujets", description = "Banque de sujets et versions"),
         (name = "systeme", description = "Supervision"),
     ),
 )]
@@ -37,6 +55,7 @@ pub fn router(state: AppState) -> Router {
         .merge(auth::router())
         .merge(groups::router())
         .merge(health::router())
+        .merge(subjects::router())
         .split_for_parts();
 
     // Sérialisé une fois au démarrage : le document ne change pas d'une requête

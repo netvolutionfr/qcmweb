@@ -204,6 +204,44 @@ impl FromRequestParts<AppState> for Agent {
     }
 }
 
+/// Preuve qu'une requête émane d'un principal autorisé à **rédiger** un sujet.
+///
+/// L'enseignant et l'agent y sont tous deux admis : déposer un brouillon est
+/// précisément ce qu'un agent doit pouvoir faire. En revanche la validation,
+/// l'ouverture d'une évaluation et tout ce qui détruit restent réservés à
+/// l'extracteur [`Teacher`] — c'est la règle « l'agent écrit, l'humain
+/// publie » de [ADR-0003](../../docs/adr/0003-administration-par-facade-mcp.md),
+/// portée par le type plutôt que par la vigilance du handler.
+pub enum Author {
+    Teacher,
+    Agent,
+}
+
+impl Author {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Author::Teacher => "teacher",
+            Author::Agent => "agent",
+        }
+    }
+}
+
+impl FromRequestParts<AppState> for Author {
+    type Rejection = AppError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        if Teacher::from_request_parts(parts, state).await.is_ok() {
+            return Ok(Author::Teacher);
+        }
+        Agent::from_request_parts(parts, state)
+            .await
+            .map(|_| Author::Agent)
+    }
+}
+
 fn session_cookie(parts: &Parts) -> Option<String> {
     parts
         .headers
