@@ -95,7 +95,7 @@ struct AttemptRow {
 /// Les participants sont lus depuis le **groupe** de l'évaluation et non depuis
 /// les tentatives : c'est ce qui fait apparaître les absents, qui seraient
 /// invisibles dans une simple jointure sur les copies.
-async fn collect(state: &AppState, id: Uuid) -> Result<ResultsTable, AppError> {
+pub(crate) async fn collect(state: &AppState, id: Uuid) -> Result<ResultsTable, AppError> {
     let participants: Vec<(Uuid, String)> = sqlx::query_as(
         "SELECT p.id, p.token
            FROM participants p

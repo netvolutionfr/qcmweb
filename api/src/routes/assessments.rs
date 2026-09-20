@@ -201,12 +201,16 @@ fn present(row: Row, now: OffsetDateTime) -> Assessment {
 /// Liste les évaluations.
 #[utoipa::path(get, path = "/api/assessments", responses((status = 200, body = [Assessment])), tag = "evaluations")]
 async fn list(_: Author, State(state): State<AppState>) -> Result<Json<Vec<Assessment>>, AppError> {
+    Ok(Json(list_assessments(&state).await?))
+}
+
+pub(crate) async fn list_assessments(state: &AppState) -> Result<Vec<Assessment>, AppError> {
     let rows = sqlx::query_as::<_, Row>(SELECT_ALL)
         .fetch_all(&state.db)
         .await?;
 
     let now = OffsetDateTime::now_utc();
-    Ok(Json(rows.into_iter().map(|r| present(r, now)).collect()))
+    Ok(rows.into_iter().map(|r| present(r, now)).collect())
 }
 
 /// Détail d'une évaluation.
@@ -249,6 +253,15 @@ async fn create(
     State(state): State<AppState>,
     Json(body): Json<NewAssessment>,
 ) -> Result<Json<Assessment>, AppError> {
+    Ok(Json(create_assessment(&state, author, body).await?))
+}
+
+/// Création d'une évaluation, partagée par les façades REST et MCP.
+pub(crate) async fn create_assessment(
+    state: &AppState,
+    author: Author,
+    body: NewAssessment,
+) -> Result<Assessment, AppError> {
     let name = body.name.trim();
     if name.is_empty() {
         return Err(AppError::BadRequest("nom d'évaluation vide".into()));
@@ -276,7 +289,7 @@ async fn create(
     .await?
     .ok_or(AppError::NotFound)?;
 
-    let id = insert(&state, &body, name, version_id).await?;
+    let id = insert(state, &body, name, version_id).await?;
 
     audit::record(
         &state.db,
@@ -292,7 +305,7 @@ async fn create(
     )
     .await;
 
-    Ok(Json(fetch(&state, id).await?))
+    fetch(state, id).await
 }
 
 /// Ouvre l'évaluation aux élèves. **Réservé à l'enseignant.**
@@ -341,7 +354,7 @@ async fn close(
 // Utilitaires
 // ---------------------------------------------------------------------------
 
-async fn fetch(state: &AppState, id: Uuid) -> Result<Assessment, AppError> {
+pub(crate) async fn fetch(state: &AppState, id: Uuid) -> Result<Assessment, AppError> {
     let row = sqlx::query_as::<_, Row>(SELECT_ONE)
         .bind(id)
         .fetch_optional(&state.db)

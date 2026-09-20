@@ -11,8 +11,11 @@ YAML à une évaluation accessible à une classe.
 > déposé, ouvre une évaluation ; un élève s'y connecte, compose, remet sa copie
 > et reçoit son retour ; l'enseignant consulte les résultats et les exporte.
 >
-> Manquent encore la façade MCP, le recalcul après neutralisation d'une
-> question, et l'épreuve du terrain. Rien n'a encore servi en classe.
+> La façade MCP est en place : un agent lit le schéma, rédige, se corrige,
+> dépose un brouillon et rend l'adresse de relecture.
+>
+> Manquent encore le recalcul après neutralisation d'une question, et
+> l'épreuve du terrain. Rien n'a encore servi en classe.
 
 ---
 

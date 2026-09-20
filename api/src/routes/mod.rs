@@ -6,9 +6,17 @@ pub mod health;
 pub mod results;
 pub mod subjects;
 
-use axum::response::IntoResponse;
+use axum::extract::{FromRequestParts, Request, State};
+use axum::middleware::{self, Next};
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
+use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
+use rmcp::transport::StreamableHttpService;
+
+use crate::auth::Agent;
+use crate::error::AppError;
+use crate::mcp::QcmTools;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 
@@ -56,6 +64,61 @@ use crate::state::AppState;
 )]
 pub struct ApiDoc;
 
+/// Monte la façade MCP sur `/mcp`.
+///
+/// Même application, même middleware, mêmes fonctions de service que la façade
+/// REST (ADR-0003). Seule la porte d'entrée diffère.
+fn mcp_route(state: AppState) -> Router<AppState> {
+    let service = StreamableHttpService::new(
+        {
+            let state = state.clone();
+            move || Ok(QcmTools::new(state.clone()))
+        },
+        LocalSessionManager::default().into(),
+        Default::default(),
+    );
+
+    Router::new()
+        .nest_service("/mcp", service)
+        .layer(middleware::from_fn_with_state(state, require_agent))
+}
+
+/// Exige une clé d'API de scope `agent`.
+///
+/// On réutilise l'extracteur `Agent` plutôt que de refaire la vérification :
+/// deux implémentations de la même règle finiraient par diverger, et c'est
+/// celle-ci qui borne ce qu'un agent peut atteindre.
+async fn require_agent(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> Result<Response, AppError> {
+    let (mut parts, body) = request.into_parts();
+    Agent::from_request_parts(&mut parts, &state).await?;
+    Ok(next.run(Request::from_parts(parts, body)).await)
+}
+
+/// Le JSON Schema du format natif, extrait du document OpenAPI.
+///
+/// Un seul artefact décrit le format : le modèle Rust. L'OpenAPI et la
+/// ressource MCP en sont deux projections, ce qui interdit à la documentation
+/// de diverger du code.
+pub fn qcm_schema() -> String {
+    let openapi = ApiDoc::openapi();
+    let schemas = serde_json::to_value(&openapi)
+        .ok()
+        .and_then(|v| v.get("components").and_then(|c| c.get("schemas")).cloned())
+        .unwrap_or(serde_json::Value::Null);
+
+    serde_json::to_string_pretty(&serde_json::json!({
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "qcm/v1",
+        "$ref": "#/$defs/Document",
+        "$defs": schemas,
+    }))
+    .unwrap_or_default()
+}
+
 pub fn router(state: AppState) -> Router {
     let (router, openapi) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .merge(assessments::router())
@@ -72,6 +135,7 @@ pub fn router(state: AppState) -> Router {
     let document = serde_json::to_string(&openapi).expect("document OpenAPI sérialisable");
 
     router
+        .merge(mcp_route(state.clone()))
         .route(
             "/api/openapi.json",
             get(move || {

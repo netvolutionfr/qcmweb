@@ -213,6 +213,7 @@ docker compose up -d postgres   # Postgres, port hôte 5434 par défaut
 cd api && cargo run             # applique les migrations puis sert l'API
 cd api && cargo test            # tests backend
 curl localhost:3000/api/health  # vérifie API + base
+cd api && cargo run -- mint-key "Agent local"   # clé pour la façade MCP
 ```
 
 Un **seul `.env`, à la racine**, sert à la fois à l'interpolation Compose et à

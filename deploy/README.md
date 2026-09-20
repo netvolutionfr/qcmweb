@@ -54,6 +54,42 @@ pas celle de la passerelle :
 docker compose logs api | grep "connexion refusée"
 ```
 
+## Brancher un agent sur la façade MCP
+
+Créer une clé, qui ne sera affichée qu'une fois :
+
+```bash
+docker compose exec api qcmweb-api mint-key "Claude Code portable"
+```
+
+La déposer dans la configuration du client MCP — **jamais dans une
+conversation**, un secret collé dans un prompt part chez un fournisseur de
+modèle et se retrouve dans des journaux :
+
+```json
+{
+  "mcpServers": {
+    "qcmweb": {
+      "type": "http",
+      "url": "https://qcm.exemple.fr/mcp",
+      "headers": { "Authorization": "Bearer qcmw_…" }
+    }
+  }
+}
+```
+
+La clé porte le scope `agent` : elle permet de rédiger des sujets, de créer des
+évaluations sur des versions validées et de lire des résultats pseudonymisés.
+Elle ne permet ni de valider un sujet, ni d'ouvrir une évaluation, ni
+d'approcher les participants.
+
+Révoquer une clé :
+
+```bash
+docker compose exec -T postgres psql -U qcmweb -d qcmweb \
+  -c "UPDATE api_keys SET revoked_at = now() WHERE label = 'Claude Code portable';"
+```
+
 ## Sauvegarde
 
 ```bash

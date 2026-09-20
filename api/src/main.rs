@@ -4,6 +4,7 @@ mod auth;
 mod config;
 mod domain;
 mod error;
+mod mcp;
 mod routes;
 mod state;
 

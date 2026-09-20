@@ -512,6 +512,15 @@ génération : l'agent produit, valide, corrige et redépose sans intervention.
 `qcm_publish_draft` retourne l'URL de relecture, ce qui donne la jonction
 naturelle entre le travail de l'agent et celui de l'enseignant.
 
+Le schéma exposé est **dérivé du document OpenAPI**, lui-même engendré par les
+annotations du modèle Rust. Un seul artefact décrit le format, et il est
+impossible que la documentation diverge du code.
+
+Le serveur annonce enfin, dans ses `instructions`, ce qui **n'existe pas** dans
+la façade : validation d'un sujet, ouverture d'une évaluation, accès aux
+participants. Un agent qui l'ignore perdrait son temps à chercher un outil
+absent, ou insisterait auprès de l'enseignant.
+
 ## Règle de partage : l'agent écrit, l'humain publie
 
 Toute transition qui rend quelque chose visible aux élèves, ou qui détruit des

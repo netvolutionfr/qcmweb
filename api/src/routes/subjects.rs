@@ -131,6 +131,10 @@ async fn validate(_: Author, body: String) -> Result<Json<Verdict>, AppError> {
 /// Liste les sujets de la banque.
 #[utoipa::path(get, path = "/api/subjects", responses((status = 200, body = [Subject])), tag = "sujets")]
 async fn list(_: Author, State(state): State<AppState>) -> Result<Json<Vec<Subject>>, AppError> {
+    Ok(Json(list_subjects(&state).await?))
+}
+
+pub(crate) async fn list_subjects(state: &AppState) -> Result<Vec<Subject>, AppError> {
     let rows = sqlx::query_as::<_, (Uuid, OffsetDateTime, Option<OffsetDateTime>, i32, String, String)>(
         "SELECT s.id, s.created_at, s.archived_at, v.number, v.status, v.title
            FROM subjects s
@@ -143,7 +147,7 @@ async fn list(_: Author, State(state): State<AppState>) -> Result<Json<Vec<Subje
     .fetch_all(&state.db)
     .await?;
 
-    Ok(Json(
+    Ok(
         rows.into_iter()
             .map(|(id, created_at, archived_at, number, status, title)| Subject {
                 id,
@@ -154,7 +158,7 @@ async fn list(_: Author, State(state): State<AppState>) -> Result<Json<Vec<Subje
                 created_at,
             })
             .collect(),
-    ))
+    )
 }
 
 /// Détail d'un sujet et de toutes ses versions.
@@ -169,6 +173,10 @@ async fn detail(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<SubjectDetail>, AppError> {
+    Ok(Json(subject_detail(&state, id).await?))
+}
+
+pub(crate) async fn subject_detail(state: &AppState, id: Uuid) -> Result<SubjectDetail, AppError> {
     let (created_at, archived_at) =
         sqlx::query_as::<_, (OffsetDateTime, Option<OffsetDateTime>)>(
             "SELECT created_at, archived_at FROM subjects WHERE id = $1",
@@ -178,10 +186,10 @@ async fn detail(
         .await?
         .ok_or(AppError::NotFound)?;
 
-    let versions = versions_of(&state, id).await?;
+    let versions = versions_of(state, id).await?;
     let latest = versions.first().ok_or(AppError::NotFound)?;
 
-    Ok(Json(SubjectDetail {
+    Ok(SubjectDetail {
         subject: Subject {
             id,
             title: latest.title.clone(),
@@ -191,7 +199,7 @@ async fn detail(
             created_at,
         },
         versions,
-    }))
+    })
 }
 
 /// Document complet d'une version, tel qu'il a été déposé.
@@ -239,13 +247,26 @@ async fn deposit(
     State(state): State<AppState>,
     body: String,
 ) -> Result<Json<Deposited>, AppError> {
-    let document = parse(&body).map_err(AppError::Invalid)?;
+    Ok(Json(deposit_document(&state, author, &body).await?))
+}
+
+/// Dépôt d'un sujet, partagé par la façade REST et la façade MCP.
+///
+/// Les deux façades appellent la même fonction : dupliquer la logique
+/// garantirait qu'elles divergent, et c'est précisément ici que se trouve la
+/// règle « le dépôt produit toujours un brouillon ».
+pub(crate) async fn deposit_document(
+    state: &AppState,
+    author: Author,
+    body: &str,
+) -> Result<Deposited, AppError> {
+    let document = parse(body).map_err(AppError::Invalid)?;
 
     let (subject_id,) = sqlx::query_as::<_, (Uuid,)>("INSERT INTO subjects DEFAULT VALUES RETURNING id")
         .fetch_one(&state.db)
         .await?;
 
-    insert_version(&state, subject_id, 1, &document).await?;
+    insert_version(state, subject_id, 1, &document).await?;
 
     audit::record(
         &state.db,
@@ -255,13 +276,13 @@ async fn deposit(
     )
     .await;
 
-    Ok(Json(Deposited {
+    Ok(Deposited {
         subject_id,
         version: 1,
         status: "DRAFT".into(),
         review_url: format!("/sujets/{subject_id}/versions/1"),
         summary: summarize(&document),
-    }))
+    })
 }
 
 /// Ajoute une version à un sujet existant. Elle est elle aussi un brouillon.
@@ -393,8 +414,7 @@ async fn archive(
     )
     .await;
 
-    let Json(detail) = detail(Author::Teacher, State(state), Path(id)).await?;
-    Ok(Json(detail.subject))
+    Ok(Json(subject_detail(&state, id).await?.subject))
 }
 
 // ---------------------------------------------------------------------------
@@ -403,7 +423,7 @@ async fn archive(
 
 /// Lit puis valide un document. Les erreurs de syntaxe et les erreurs métier
 /// sont rendues sous la même forme, l'appelant n'ayant pas à les distinguer.
-fn parse(body: &str) -> Result<Document, Vec<ValidationError>> {
+pub(crate) fn parse(body: &str) -> Result<Document, Vec<ValidationError>> {
     if body.len() > MAX_DOCUMENT_BYTES {
         return Err(vec![ValidationError {
             path: String::new(),
