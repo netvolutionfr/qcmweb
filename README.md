@@ -162,6 +162,7 @@ Tests du backend : `cd api && cargo test`.
 
 - [SPEC.md](SPEC.md) — spécification fonctionnelle complète, référence du projet.
 - [CLAUDE.md](CLAUDE.md) — invariants et règles d'ingénierie, à lire avant de contribuer.
+- [docs/adr/](docs/adr/) — décisions d'architecture et leurs raisons.
 
 ## Licence
 

@@ -123,7 +123,9 @@ document hostile ne peut, au pire, que déposer un brouillon indésirable. La
 porte `DRAFT → VALIDATED` humaine est la protection réelle. Ne jamais
 l'automatiser, même « pour les évaluations formatives ».
 
-## Authentification
+---
+
+## 5. Authentification
 
 Deux principaux, deux mécanismes, jamais interchangeables :
 
@@ -158,7 +160,7 @@ générique produirait une surface inutilisable par un agent.
 
 ---
 
-## 5. Règles d'ingénierie
+## 6. Règles d'ingénierie
 
 - **Le backend est l'unique source de vérité.** Heure de début, durée, heure de
   remise et calcul du score sont serveur. Le client ne fait qu'afficher.
@@ -188,7 +190,7 @@ générique produirait une surface inutilisable par un agent.
 
 ---
 
-## 6. Périmètre
+## 7. Périmètre
 
 Le MVP est le scénario complet du §23 de la SPEC (modèle par jetons,
 administration par agent).
@@ -203,7 +205,7 @@ classement, texte à trous, correction manuelle, OIDC/LDAP/ENT.
 
 ---
 
-## 7. Commandes
+## 8. Commandes
 
 ```bash
 cp .env.example .env            # une fois, puis remplacer les valeurs
@@ -242,7 +244,7 @@ jamais écrire à la main un type qui décrit une réponse d'API.
 
 ---
 
-## 8. Conventions
+## 9. Conventions
 
 - Interface et documentation utilisateur en **français**. Code, identifiants et
   messages de commit en **anglais**.
@@ -263,9 +265,25 @@ jamais écrire à la main un type qui décrit une réponse d'API.
   une valeur par défaut silencieuse.
 - Toute logique non triviale de correction ou de barème laisse un test derrière
   elle.
+- **Toute décision d'architecture donne lieu à une ADR** dans `docs/adr/`, dans
+  la foulée de la décision et non « plus tard ». Une ADR se justifie dès qu'un
+  choix pourrait raisonnablement être contesté, repose sur une contrainte non
+  évidente, ou assume un compromis. Elle dit surtout **pourquoi pas la solution
+  évidente** : c'est cette partie qui manque toujours six mois après.
+  Une ADR acceptée est immuable — une décision qui change en produit une
+  nouvelle, l'ancienne passant en *Remplacée par*. Voir
+  [docs/adr/README.md](docs/adr/README.md).
 
 ---
 
-## 9. Licence
+## 10. Historique des décisions
+
+Les choix structurants sont consignés dans [docs/adr/](docs/adr/). À lire avant
+de remettre en cause une contrainte qui paraît arbitraire — elle a
+probablement une raison, et cette raison y est écrite.
+
+---
+
+## 11. Licence
 
 MIT. Voir [LICENSE](LICENSE).
