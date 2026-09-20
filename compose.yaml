@@ -21,6 +21,9 @@ services:
     restart: unless-stopped
 
   api:
+    # `build` sert au développement local, `image` à la production : la CI
+    # construit et publie l'image, le serveur ne compile jamais (ADR-0014).
+    image: ghcr.io/netvolutionfr/qcmweb-api:${IMAGE_TAG:-latest}
     build:
       context: ./api
     environment:
@@ -45,6 +48,22 @@ services:
       - "127.0.0.1:${API_PORT:-3000}:3000"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  web:
+    image: ghcr.io/netvolutionfr/qcmweb-web:${IMAGE_TAG:-latest}
+    build:
+      context: ./web
+    # Nginx, sur l'hôte, route `/` vers ce port et `/api/`, `/mcp` vers l'API.
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3001}:3001"
+    healthcheck:
+      # L'image node n'a pas curl : on sonde avec le runtime déjà présent.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/connexion').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
       interval: 15s
       timeout: 3s
       retries: 3

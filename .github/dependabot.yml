@@ -1,0 +1,8 @@
+# Les actions sont épinglées par SHA : sans mise à jour automatique, ces
+# épinglages vieilliraient sans que personne ne s'en aperçoive.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

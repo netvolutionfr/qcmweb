@@ -14,17 +14,139 @@ Internet ──TLS──> Nginx (hôte)
 Seul Nginx est exposé. L'API et Postgres ne publient leurs ports que sur la
 boucle locale de l'hôte.
 
-## Mise en route
+## Déploiement automatique
+
+Un push sur `main` lance [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) :
+
+```
+tests ──> construction des images ──> déploiement ──> vérification publique
+          (publiées sur GHCR)         (SSH, une commande)
+```
+
+Les images sont construites par la CI et **le serveur ne compile jamais** : il
+récupère celles dont le tag est le SHA du commit, puis `docker compose up -d
+--wait` attend que les healthchecks passent. Un déploiement qui échoue fait
+échouer le workflow.
+
+Les commits qui ne touchent que de la documentation (`*.md`, `docs/`) ne
+déclenchent rien.
+
+**Retour arrière** : dans l'onglet Actions, rouvrir un run antérieur réussi et
+relancer son job `deploy`. Limite : les migrations ne vont que vers l'avant, un
+retour au code précédent ne défait pas un changement de schéma.
+
+## Mise en place, une seule fois
+
+### 1. Sur le serveur
+
+```bash
+# Utilisateur dédié. Le groupe docker équivaut à root : c'est pourquoi la clé
+# ci-dessous est restreinte à une seule commande.
+sudo useradd --create-home --shell /bin/bash deploy
+sudo usermod -aG docker deploy
+
+sudo mkdir /opt/qcmweb && sudo chown deploy: /opt/qcmweb
+sudo -u deploy git clone https://github.com/netvolutionfr/qcmweb.git /opt/qcmweb
+```
+
+Les secrets **applicatifs** vivent ici, sur le serveur, et nulle part dans
+GitHub :
+
+```bash
+sudo -u deploy cp /opt/qcmweb/.env.example /opt/qcmweb/.env
+sudo -u deploy chmod 600 /opt/qcmweb/.env
+sudo -u deploy nano /opt/qcmweb/.env
+```
+
+Remplacer **toutes** les valeurs : `POSTGRES_PASSWORD` (aléatoire),
+`TEACHER_PASSWORD_HASH` (voir plus bas, apostrophes simples obligatoires),
+`TRUSTED_PROXY_CIDRS`. Le fichier n'est jamais versionné.
+
+Empreinte du mot de passe enseignant, à générer sur votre poste :
+
+```bash
+cd api && cargo run -- hash-password
+```
+
+### 2. La clé de déploiement
+
+Sur votre poste :
+
+```bash
+ssh-keygen -t ed25519 -N "" -C "github-actions qcmweb" -f qcmweb-deploy
+```
+
+Sur le serveur, dans `/home/deploy/.ssh/authorized_keys`, **sur une seule
+ligne** :
+
+```
+command="/opt/qcmweb/deploy/deploy.sh",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding ssh-ed25519 AAAA… github-actions qcmweb
+```
+
+Cette clé ne donne **aucun shell** : quoi qu'on lui demande, le serveur exécute
+`deploy.sh`, qui ne sait déployer qu'un commit précis. Une clé volée ne permet
+donc pas de prendre la machine.
+
+Empreinte du serveur, à relever depuis un réseau de confiance et à comparer à
+celle que donne `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` sur le
+serveur :
+
+```bash
+ssh-keyscan -t ed25519 mon-serveur.example
+```
+
+### 3. Dans GitHub
+
+*Settings → Environments → New environment* : `production`, puis *Deployment
+branches → Selected branches → `main`*. Ainsi un workflow poussé sur une autre
+branche ne peut pas lire la clé.
+
+Secrets **de l'environnement `production`** :
+
+| Secret | Contenu |
+|---|---|
+| `DEPLOY_HOST` | nom d'hôte ou adresse du serveur |
+| `DEPLOY_USER` | `deploy` |
+| `DEPLOY_SSH_KEY` | contenu **complet** du fichier `qcmweb-deploy` (clé privée) |
+| `DEPLOY_KNOWN_HOSTS` | la ligne rendue par `ssh-keyscan`, à l'identique |
+| `DEPLOY_PORT` | *optionnel* — seulement si SSH n'écoute pas sur 22 |
+
+Variable **de l'environnement** (non secrète) :
+
+| Variable | Contenu |
+|---|---|
+| `PROD_URL` | `https://qcm.exemple.fr`, sans `/` final. Active la vérification publique après déploiement. |
+
+Hors port 22, `ssh-keyscan -p <port>` produit une ligne `[hôte]:port …` : c'est
+elle qu'il faut coller.
+
+Ces secrets ne donnent accès qu'au déploiement. `DEPLOY_HOST` est un secret
+parce que le dépôt est public, et que ses journaux le sont aussi.
+
+Puis supprimer la clé privée de votre poste, elle n'a plus rien à y faire.
+
+### 4. Nginx
+
+Déposer [nginx.conf.example](nginx.conf.example) adapté dans
+`/etc/nginx/sites-available/`, créer le lien dans `sites-enabled/`, obtenir le
+certificat avec certbot, et `nginx -t && systemctl reload nginx`.
+
+Le premier push sur `main` fait le reste.
+
+### Mise à jour de `deploy.sh`
+
+Le script exécuté est celui **déjà présent** sur le serveur, avant qu'il ne se
+synchronise sur le nouveau commit. Une modification de `deploy.sh` ne prend donc
+effet qu'au déploiement suivant.
+
+## Démarrage manuel
+
+Sans passer par la CI, pour un essai local ou un dépannage :
 
 ```bash
 cp .env.example .env            # puis remplacer toutes les valeurs
-cd api && cargo run -- hash-password   # empreinte du mot de passe enseignant
 docker compose up -d --build
 ```
-
-Puis déposer [nginx.conf.example](nginx.conf.example) adapté dans
-`/etc/nginx/sites-available/`, créer le lien dans `sites-enabled/`, obtenir le
-certificat avec certbot, et `nginx -t && systemctl reload nginx`.
 
 ## `TRUSTED_PROXY_CIDRS`, le réglage à ne pas manquer
 

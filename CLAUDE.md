@@ -232,6 +232,19 @@ Déploiement : Debian Trixie, Docker, Nginx en frontal pour TLS. Voir
 [deploy/README.md](deploy/README.md) — et en particulier `TRUSTED_PROXY_CIDRS`,
 qui n'a pas de valeur par défaut sûre.
 
+Un push sur `main` déploie en production, une fois les tests passés
+([ADR-0014](docs/adr/0014-deploiement-continu.md)). Règles à ne pas casser :
+
+- **Les secrets applicatifs ne vont jamais dans GitHub.** Ils vivent dans le
+  `.env` du serveur. GitHub ne détient que l'accès de déploiement.
+- **La clé SSH de déploiement n'a pas de shell** : `authorized_keys` la force sur
+  `deploy/deploy.sh`. Ne jamais élargir ce que ce script accepte sans revoir la
+  validation de ses entrées.
+- **Toute action tierce est épinglée par SHA.** Jamais d'étiquette de version.
+- Un lockfile npm généré sous macOS peut omettre des dépendances optionnelles et
+  faire échouer `npm ci` sous Linux, donc la CI. Après un changement de
+  dépendances, vérifier avec `docker compose build web`.
+
 Les migrations sont appliquées au démarrage par `sqlx::migrate!`, il n'y a donc
 pas d'étape manuelle. Le port hôte par défaut est 5434 parce que 5432 et 5433
 sont déjà occupés par d'autres projets sur le poste de développement ;

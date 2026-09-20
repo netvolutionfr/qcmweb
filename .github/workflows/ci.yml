@@ -1,0 +1,129 @@
+name: CI/CD
+
+# Tests sur toute modification ; construction des images et déploiement
+# uniquement sur un push vers main, une fois les tests passés (ADR-0014).
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**/*.md", "docs/**", "LICENSE"]
+  pull_request:
+    paths-ignore: ["**/*.md", "docs/**", "LICENSE"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Un déploiement en cours n'est jamais interrompu : le suivant attend.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: api
+
+      - name: API
+        working-directory: api
+        # Les tests du domaine sont purs : ni base, ni réseau.
+        run: cargo test --locked
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Front
+        working-directory: web
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+
+  images:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        service: [api, web]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./${{ matrix.service }}
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/qcmweb-${{ matrix.service }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/qcmweb-${{ matrix.service }}:latest
+          # Rattache le paquet au dépôt : c'est ce qui lui donne les droits
+          # de lecture dont le job de déploiement a besoin.
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy:
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # L'environnement porte les secrets et n'est accessible qu'à `main` : un
+    # workflow poussé sur une autre branche ne peut pas lire la clé SSH.
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Déployer
+        env:
+          # Passés par l'environnement, jamais interpolés dans le script :
+          # `${{ }}` dans un `run:` est une injection de commande en puissance.
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER_NAME: ${{ secrets.DEPLOY_USER }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          # Empreinte du serveur épinglée : un `ssh-keyscan` lancé ici
+          # accepterait n'importe quel serveur, et annulerait la vérification.
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+          # L'hôte n'a pas de shell à offrir : la commande est celle de
+          # `authorized_keys`, ceci n'est que son argument.
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -p "${PORT:-22}" "$USER_NAME@$HOST" \
+              "$GITHUB_SHA $GITHUB_ACTOR" <<<"$GHCR_TOKEN"
+
+      - name: Vérifier en production
+        # Traverse Nginx et TLS, que le healthcheck interne ne voit pas.
+        if: vars.PROD_URL != ''
+        env:
+          PROD_URL: ${{ vars.PROD_URL }}
+        run: |
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 --retry-connrefused \
+               "$PROD_URL/api/health"
+          echo
+          curl --fail --silent --show-error --output /dev/null "$PROD_URL/connexion"
