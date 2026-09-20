@@ -1,11 +1,12 @@
 import type { Slip } from "@/lib/roster";
 
 /**
- * Planche de billets à découper.
+ * Aperçu à l'écran de la planche de billets.
  *
- * Une colonne sur téléphone, deux à partir de `sm`, et toujours deux à
- * l'impression : la grille d'écran n'a aucune raison de dicter la mise en page
- * d'une feuille A4.
+ * La planche imprimable est produite par `lib/billets-pdf.ts`, composée au
+ * millimètre. Cet aperçu sert à vérifier les données avant téléchargement, pas
+ * à être imprimé : `items-start` empêche les lignes de s'étirer, ce qui
+ * donnerait des billets de hauteur variable.
  */
 export function BilletSheet({
   slips,
@@ -15,7 +16,7 @@ export function BilletSheet({
   group?: { label: string; school_year: string };
 }) {
   return (
-    <div className="zone-impression grid grid-cols-1 gap-3 sm:grid-cols-2 print:grid-cols-2">
+    <div className="zone-impression grid grid-cols-1 items-start gap-3 sm:grid-cols-2 print:grid-cols-2">
       {slips.map((slip) => (
         <article key={slip.id} className="billet rounded-lg border p-4">
           <p className="font-medium">

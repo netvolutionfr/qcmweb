@@ -279,12 +279,15 @@ web/
     api.ts               client typé, même origine
     openapi.d.ts         généré, ne jamais éditer
     roster.ts            lecture CSV et jointure — strictement locale
+    billets-pdf.ts       planche A4 composée au millimètre — locale aussi
 ```
 
 Règles du front :
 
-- **`lib/roster.ts` ne doit jamais appeler `fetch`.** C'est le module qui
-  manipule les noms ; l'invariant RGPD tient à ce qu'il reste hors réseau.
+- **`lib/roster.ts` et `lib/billets-pdf.ts` ne doivent jamais appeler `fetch`.**
+  Ce sont les modules qui manipulent les noms ; l'invariant RGPD tient à ce
+  qu'ils restent hors réseau. Le PDF des billets contient noms et secrets : il
+  est composé dans le navigateur et n'est envoyé nulle part.
 - **Thème par `prefers-color-scheme`**, pas par classe : aucune dépendance,
   aucun flash avant hydratation. Une bascule manuelle exigerait `next-themes`
   et le retour au variant par classe (voir ADR-0009).

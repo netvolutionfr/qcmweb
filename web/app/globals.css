@@ -23,8 +23,14 @@
     visibility: visible;
   }
   .zone-impression {
+    /* Pas d'`inset: 0` : il forcerait la grille à occuper toute la hauteur de
+       la page, qui répartirait alors ses lignes proportionnellement et
+       donnerait des billets de hauteur variable selon leur nombre. */
     position: absolute;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    align-content: start;
     background: white;
     color: black;
   }

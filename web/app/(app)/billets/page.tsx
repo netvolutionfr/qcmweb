@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, Printer, ShieldCheck, TriangleAlert, Upload } from "lucide-react";
+import { Download, FileDown, ShieldCheck, TriangleAlert, Upload } from "lucide-react";
 import { api, currentSchoolYear, type Group } from "@/lib/api";
 import { joinTokens, parseRoster, rosterCsv, type Slip, type Student } from "@/lib/roster";
 import { BilletSheet } from "@/components/billets/billet-sheet";
+import { buildBillets, pageCount } from "@/lib/billets-pdf";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -91,16 +92,26 @@ export default function Billets() {
     }
   }
 
-  function download() {
-    if (!slips) return;
-    const blob = new Blob([rosterCsv(slips)], { type: "text/csv;charset=utf-8" });
+  function save(blob: Blob, filename: string) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `correspondance-${group?.label ?? "groupe"}-${group?.school_year ?? ""}.csv`;
+    link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  const stem = `${group?.label ?? "groupe"}-${group?.school_year ?? ""}`;
+
+  function downloadCsv() {
+    if (!slips) return;
+    save(new Blob([rosterCsv(slips)], { type: "text/csv;charset=utf-8" }), `correspondance-${stem}.csv`);
     setSaved(true);
+  }
+
+  function downloadPdf() {
+    if (!slips) return;
+    save(buildBillets(slips, group), `billets-${stem}.pdf`);
   }
 
   return (
@@ -245,13 +256,16 @@ export default function Billets() {
               </Alert>
 
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Button onClick={download}>
+                <Button onClick={downloadCsv}>
                   <Download className="size-4" />
                   Télécharger la correspondance
                 </Button>
-                <Button variant="secondary" onClick={() => window.print()}>
-                  <Printer className="size-4" />
-                  Imprimer les billets
+                <Button variant="secondary" onClick={downloadPdf}>
+                  <FileDown className="size-4" />
+                  Billets en PDF
+                  <span className="text-muted-foreground">
+                    ({pageCount(slips.length)} page{pageCount(slips.length) > 1 ? "s" : ""})
+                  </span>
                 </Button>
               </div>
             </CardContent>
