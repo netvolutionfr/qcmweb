@@ -3,6 +3,7 @@ pub mod auth;
 pub mod exam;
 pub mod groups;
 pub mod health;
+pub mod results;
 pub mod subjects;
 
 use axum::response::IntoResponse;
@@ -49,6 +50,7 @@ use crate::state::AppState;
         (name = "sujets", description = "Banque de sujets et versions"),
         (name = "evaluations", description = "Évaluations et codes d'accès"),
         (name = "eleve", description = "Parcours élève : code, composition, remise"),
+        (name = "resultats", description = "Tableau de résultats et exports"),
         (name = "systeme", description = "Supervision"),
     ),
 )]
@@ -61,6 +63,7 @@ pub fn router(state: AppState) -> Router {
         .merge(exam::router())
         .merge(groups::router())
         .merge(health::router())
+        .merge(results::router())
         .merge(subjects::router())
         .split_for_parts();
 

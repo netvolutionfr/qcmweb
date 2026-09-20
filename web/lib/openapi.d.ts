@@ -4,6 +4,187 @@
  */
 
 export interface paths {
+    "/api/assessments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Liste les évaluations. */
+        get: operations["list"];
+        put?: never;
+        /**
+         * Crée une évaluation et génère son code.
+         * @description Accessible à un agent : le pouvoir reste borné puisque la version doit être
+         *     **validée** — garantie posée en base — et que l'évaluation naît fermée.
+         *     Seul l'enseignant peut ensuite l'ouvrir (ADR-0003).
+         */
+        post: operations["create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assessments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Détail d'une évaluation. */
+        get: operations["detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assessments/{id}/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Démarre une tentative, ou reprend celle qui est en cours. */
+        post: operations["start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assessments/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ferme l'évaluation. **Réservé à l'enseignant.** */
+        post: operations["close"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assessments/{id}/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ouvre l'évaluation aux élèves. **Réservé à l'enseignant.** */
+        post: operations["open"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assessments/{id}/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tableau de résultats d'une évaluation.
+         * @description Pseudonymisé par construction : les lignes portent des jetons. La jointure
+         *     avec les noms s'effectue dans le navigateur de l'enseignant, à partir de sa
+         *     liste locale (ADR-0001).
+         */
+        get: operations["table"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assessments/{id}/results.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Même tableau en CSV, prêt pour un tableur. */
+        get: operations["csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/attempts/{id}/answers/{question}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Enregistre la réponse à une question. Appelé au fil de l'eau (SPEC §12). */
+        put: operations["answer"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/attempts/{id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Résultat d'une tentative, selon les règles de divulgation. */
+        get: operations["result"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/attempts/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Remet définitivement la copie et déclenche la correction. */
+        post: operations["submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/agent": {
         parameters: {
             query?: never;
@@ -69,6 +250,23 @@ export interface paths {
         get: operations["me"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Authentifie un participant par jeton et secret. */
+        post: operations["login"];
         delete?: never;
         options?: never;
         head?: never;
@@ -148,6 +346,23 @@ export interface paths {
         get: operations["health"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/join/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Présente les consignes d'une évaluation à partir de son code. */
+        post: operations["join"];
         delete?: never;
         options?: never;
         head?: never;
@@ -361,6 +576,87 @@ export interface components {
         ArchiveTarget: {
             archived: boolean;
         };
+        Assessment: {
+            /** @description Composable à cet instant : état **et** fenêtre planifiée. */
+            available: boolean;
+            /** Format: date-time */
+            closes_at?: string | null;
+            code: string;
+            correction_release: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int32 */
+            duration_minutes?: number | null;
+            /** Format: uuid */
+            group_id: string;
+            group_label: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: int32 */
+            max_attempts: number;
+            /** Format: double */
+            max_grade: number;
+            mode: string;
+            name: string;
+            /** Format: date-time */
+            opens_at?: string | null;
+            score_release: string;
+            shuffle_choices: boolean;
+            shuffle_questions: boolean;
+            state: string;
+            /** Format: uuid */
+            subject_id: string;
+            subject_title: string;
+            /** Format: int32 */
+            subject_version: number;
+            /** Format: double */
+            total_points: number;
+        };
+        /**
+         * @description Retour fait à l'élève, taillé selon les règles de l'évaluation.
+         *
+         *     Les champs absents ne sont pas masqués à l'affichage : ils ne sont pas
+         *     calculés dans la réponse (SPEC §10).
+         */
+        AttemptResult: {
+            correction?: null | components["schemas"]["Grading"];
+            /** Format: double */
+            grade?: number | null;
+            /** Format: double */
+            max_grade?: number | null;
+            /** Format: double */
+            max_score?: number | null;
+            /** Format: double */
+            percentage?: number | null;
+            /** Format: double */
+            score?: number | null;
+            submitted: boolean;
+            /** Format: date-time */
+            submitted_at?: string | null;
+        };
+        Briefing: {
+            /** Format: uuid */
+            assessment_id: string;
+            /**
+             * Format: int32
+             * @description Tentatives restantes, aménagements compris.
+             */
+            attempts_left: number;
+            description?: string | null;
+            /** Format: int32 */
+            duration_minutes?: number | null;
+            name: string;
+            /** Format: int32 */
+            question_count: number;
+            /**
+             * Format: uuid
+             * @description Tentative déjà commencée et non remise, à reprendre.
+             */
+            resumable_attempt?: string | null;
+            subject_title: string;
+            /** Format: double */
+            total_points: number;
+        };
         Choice: {
             correct?: boolean;
             id: string;
@@ -387,6 +683,40 @@ export interface components {
             metadata: components["schemas"]["Metadata"];
             questions: components["schemas"]["Question"][];
             schema: string;
+        };
+        Exam: {
+            description?: string | null;
+            questions: components["schemas"]["ExamQuestion"][];
+            title: string;
+            /** Format: double */
+            total_points: number;
+        };
+        ExamChoice: {
+            id: string;
+            text: string;
+        };
+        ExamQuestion: {
+            choices: components["schemas"]["ExamChoice"][];
+            id: string;
+            /** @description `single_choice`, `multiple_choice` ou `true_false`. */
+            kind: string;
+            /** @description Plusieurs réponses peuvent être cochées. */
+            multiple: boolean;
+            /** Format: double */
+            points: number;
+            prompt: string;
+        };
+        GivenAnswer: {
+            choices: string[];
+        };
+        Grading: {
+            /** Format: double */
+            max_score: number;
+            per_question: components["schemas"]["QuestionScore"][];
+            /** Format: double */
+            percentage: number;
+            /** Format: double */
+            score: number;
         };
         Group: {
             /** Format: date-time */
@@ -437,6 +767,33 @@ export interface components {
             prompt: string;
             scoring?: components["schemas"]["Scoring"];
         };
+        NewAssessment: {
+            /** Format: date-time */
+            closes_at?: string | null;
+            correction_release?: components["schemas"]["Release"];
+            /** Format: int32 */
+            duration_minutes?: number | null;
+            /** Format: uuid */
+            group_id: string;
+            /** Format: int32 */
+            max_attempts?: number;
+            /** Format: double */
+            max_grade?: number;
+            mode: components["schemas"]["Mode"];
+            name: string;
+            /** Format: date-time */
+            opens_at?: string | null;
+            score_release?: components["schemas"]["Release"];
+            shuffle_choices?: boolean;
+            shuffle_questions?: boolean;
+            /** Format: uuid */
+            subject_id: string;
+            /**
+             * Format: int32
+             * @description Version du sujet. Elle doit être validée.
+             */
+            version: number;
+        };
         NewGroup: {
             /** @description Étiquette de classe : `1SIO`, `2SIO-SLAM`. Jamais un nom de personne. */
             label: string;
@@ -474,6 +831,82 @@ export interface components {
             /** @enum {string} */
             type: "true_false";
         });
+        QuestionScore: {
+            /** @description Vrai si l'élève a obtenu la totalité des points. */
+            correct: boolean;
+            /** Format: double */
+            max_points: number;
+            /** Format: double */
+            points: number;
+            question_id: string;
+        };
+        QuestionStat: {
+            /**
+             * Format: double
+             * @description Moyenne des points obtenus, en pourcentage du barème.
+             *
+             *     Distincte du taux de réussite : en notation partielle, une question à
+             *     85 % de moyenne et 20 % de réussite complète ne raconte pas du tout la
+             *     même histoire qu'une question à 85 % des deux.
+             */
+            average_rate: number;
+            /** Format: double */
+            max_points: number;
+            question_id: string;
+            /**
+             * Format: double
+             * @description Part des copies ayant obtenu la totalité des points.
+             */
+            success_rate: number;
+        };
+        /** @enum {string} */
+        Release: "IMMEDIATE" | "AFTER_CLOSE" | "NEVER";
+        ResultRow: {
+            /**
+             * Format: int32
+             * @description Nombre de copies remises.
+             */
+            attempts: number;
+            /**
+             * Format: int64
+             * @description Durée de la copie retenue, en secondes.
+             */
+            duration_seconds?: number | null;
+            /** Format: double */
+            grade?: number | null;
+            /** Format: double */
+            max_score?: number | null;
+            /** Format: uuid */
+            participant_id: string;
+            /** Format: double */
+            percentage?: number | null;
+            /** Format: double */
+            score?: number | null;
+            standing: components["schemas"]["Standing"];
+            /** Format: date-time */
+            submitted_at?: string | null;
+            token: string;
+        };
+        ResultsTable: {
+            /** Format: int32 */
+            absent: number;
+            /**
+             * Format: double
+             * @description Moyenne des notes des copies remises.
+             */
+            average_grade?: number | null;
+            /** Format: int32 */
+            in_progress: number;
+            questions: components["schemas"]["QuestionStat"][];
+            rows: components["schemas"]["ResultRow"][];
+            /** Format: int32 */
+            submitted: number;
+        };
+        Saved: {
+            saved: boolean;
+            /** Format: date-time */
+            server_time: string;
+        };
         Scoring: {
             mode?: components["schemas"]["Mode"];
         };
@@ -484,6 +917,21 @@ export interface components {
             points?: number;
             prompt: string;
         };
+        Sitting: {
+            /** @description Réponses déjà enregistrées, pour reprendre où l'on s'était arrêté. */
+            answers: {
+                [key: string]: string[];
+            };
+            /** Format: uuid */
+            attempt_id: string;
+            /** Format: date-time */
+            deadline?: string | null;
+            exam: components["schemas"]["Exam"];
+            /** Format: date-time */
+            server_time: string;
+        };
+        /** @enum {string} */
+        Standing: "SUBMITTED" | "IN_PROGRESS" | "ABSENT";
         Subject: {
             archived: boolean;
             /** Format: date-time */
@@ -529,6 +977,10 @@ export interface components {
             explanation?: string | null;
             objectives?: string[];
         };
+        TokenCredentials: {
+            secret: string;
+            token: string;
+        };
         TrueFalse: components["schemas"]["Teaching"] & {
             answer: boolean;
             id: string;
@@ -555,6 +1007,340 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assessment"][];
+                };
+            };
+        };
+    };
+    create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewAssessment"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assessment"];
+                };
+            };
+            /** @description sujet, version ou groupe inconnu */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description la version n'est pas validée */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assessment"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sitting"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    close: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assessment"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    open: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assessment"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    table: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultsTable"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    csv: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    answer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                question: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GivenAnswer"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Saved"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    result: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttemptResult"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    submit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttemptResult"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     agent: {
         parameters: {
             query?: never;
@@ -652,6 +1438,39 @@ export interface operations {
                 };
             };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenCredentials"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -791,6 +1610,39 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Health"];
                 };
+            };
+        };
+    };
+    join: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Briefing"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

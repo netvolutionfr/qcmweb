@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseRoster, joinTokens, rosterCsv } from "./roster.ts";
+import { parseRoster, joinTokens, rosterCsv, parseCorrespondence, canonicalToken } from "./roster.ts";
 
 test("en-tetes reconnus quel que soit l'ordre et la casse", () => {
   const r = parseRoster("Prénom;NOM\nAlice;Martin\nBob;Dupont");
@@ -63,4 +63,24 @@ test("csv de correspondance echappe les champs sensibles", () => {
   ]);
   assert.match(csv, /^nom;prenom;jeton;secret\n/);
   assert.match(csv, /"Dupont; ""le grand"""/);
+});
+
+test("forme canonique d'un jeton", () => {
+  assert.equal(canonicalToken("zq93-gskn"), "ZQ93GSKN");
+  assert.equal(canonicalToken("ZQ93 GSKN"), "ZQ93GSKN");
+});
+
+test("relecture d'une table de correspondance", () => {
+  const map = parseCorrespondence("nom;prenom;jeton;secret\nMartin;Alice;ZQ93-GSKN;S1\nDupont;Bob;B9XT-RM3D;S2");
+  assert.equal(map.size, 2);
+  assert.deepEqual(map.get("ZQ93GSKN"), { lastName: "Martin", firstName: "Alice" });
+});
+
+test("jointure insensible au format du jeton", () => {
+  const map = parseCorrespondence("nom;prenom;jeton\nMartin;Alice;zq93gskn");
+  assert.deepEqual(map.get(canonicalToken("ZQ93-GSKN")), { lastName: "Martin", firstName: "Alice" });
+});
+
+test("un fichier sans colonne jeton est refuse explicitement", () => {
+  assert.throws(() => parseCorrespondence("nom;prenom\nMartin;Alice"), /colonne . jeton/);
 });

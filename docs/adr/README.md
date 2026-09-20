@@ -36,3 +36,4 @@ sans alternative sérieuse, ou une décision déjà argumentée dans [SPEC.md](.
 | [0010](0010-versions-de-sujet-immuables.md) | Versions de sujet immuables, états répartis, import unique | Acceptée |
 | [0011](0011-ouverture-et-fenetre.md) | Ouverture manuelle *et* fenêtre planifiée, code dès la création | Acceptée |
 | [0012](0012-tentatives.md) | Tentatives : fuite impossible à écrire, mélange déterministe | Acceptée |
+| [0013](0013-agregation-des-resultats.md) | Résultats : meilleure copie, absents visibles, jointure locale | Acceptée |

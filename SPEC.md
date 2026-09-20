@@ -1139,7 +1139,8 @@ POST   /api/assessments/{id}/attempts       démarre ou reprend une tentative
 PUT    /api/attempts/{id}/answers/{questionId}
 POST   /api/attempts/{id}/submit
 
-GET    /api/assessments/{id}/results
+GET    /api/assessments/{id}/results       tableau pseudonymisé et statistiques
+GET    /api/assessments/{id}/results.csv   export par jetons
 GET    /api/attempts/{id}/result
 ```
 

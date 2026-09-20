@@ -120,6 +120,54 @@ export function joinTokens(students: Student[], tokens: IssuedToken[]): Slip[] {
   return students.map((s, i) => ({ ...s, ...tokens[i] }));
 }
 
+/**
+ * Forme canonique d'un jeton : majuscules, sans séparateur.
+ *
+ * Le tiret n'existe que pour la lisibilité du billet. Comparer les formes
+ * affichées ferait échouer la jointure au moindre écart de saisie.
+ */
+export function canonicalToken(token: string): string {
+  return token.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+}
+
+/**
+ * Relit une table de correspondance précédemment téléchargée.
+ *
+ * C'est l'autre moitié de l'invariant : les noms reviennent dans le navigateur
+ * le temps d'un affichage, et n'y sont jamais renvoyés au serveur.
+ */
+export function parseCorrespondence(text: string): Map<string, Student> {
+  const clean = text.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
+  const lines = clean.split("\n").filter((l) => l.trim() !== "");
+  const out = new Map<string, Student>();
+  if (lines.length === 0) return out;
+
+  const separator = guessSeparator(lines[0]);
+  const header = splitLine(lines[0], separator).map(normalizeHeader);
+  const column = (names: string[]) => header.findIndex((h) => names.includes(h));
+
+  const lastIdx = column(LAST);
+  const firstIdx = column(FIRST);
+  const tokenIdx = column(["jeton", "token"]);
+
+  if (tokenIdx === -1) {
+    throw new Error(
+      "Ce fichier ne contient pas de colonne « jeton ». Utilisez la table de correspondance téléchargée lors de la création des billets.",
+    );
+  }
+
+  for (const line of lines.slice(1)) {
+    const fields = splitLine(line, separator);
+    const token = canonicalToken(fields[tokenIdx] ?? "");
+    if (token === "") continue;
+    out.set(token, {
+      lastName: lastIdx === -1 ? "" : (fields[lastIdx] ?? ""),
+      firstName: firstIdx === -1 ? "" : (fields[firstIdx] ?? ""),
+    });
+  }
+  return out;
+}
+
 /** Table de correspondance à conserver par l'enseignant. */
 export function rosterCsv(slips: Slip[]): string {
   const escape = (v: string) => (/[";\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);

@@ -8,6 +8,9 @@ export type SubjectVersion = components["schemas"]["SubjectVersion"];
 export type QcmDocument = components["schemas"]["Document"];
 export type Question = components["schemas"]["Question"];
 export type Choice = components["schemas"]["Choice"];
+export type Assessment = components["schemas"]["Assessment"];
+export type ResultsTable = components["schemas"]["ResultsTable"];
+export type ResultRow = components["schemas"]["ResultRow"];
 
 export class ApiError extends Error {
   constructor(
@@ -73,6 +76,17 @@ export const api = {
 
   archiveSubject: (id: string, archived: boolean) =>
     post<Subject>(`/api/subjects/${id}/archive`, { archived }),
+
+  assessments: () => call<Assessment[]>("/api/assessments"),
+
+  assessment: (id: string) => call<Assessment>(`/api/assessments/${id}`),
+
+  openAssessment: (id: string) => post<Assessment>(`/api/assessments/${id}/open`),
+
+  closeAssessment: (id: string) => post<Assessment>(`/api/assessments/${id}/close`),
+
+  /** Résultats pseudonymisés : des jetons, jamais des noms. */
+  results: (id: string) => call<ResultsTable>(`/api/assessments/${id}/results`),
 };
 
 /** Année scolaire courante, bascule au 1er août. */
