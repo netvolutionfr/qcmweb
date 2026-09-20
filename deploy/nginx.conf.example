@@ -1,0 +1,87 @@
+# Nginx en frontal sur Debian Trixie : termine TLS et proxifie vers les
+# conteneurs, qui n'écoutent que sur la boucle locale.
+#
+# À adapter puis déposer dans /etc/nginx/sites-available/, avec un lien dans
+# sites-enabled/. Le certificat est supposé géré par certbot.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name qcm.exemple.fr;
+
+    # Seul le renouvellement ACME passe en clair.
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name qcm.exemple.fr;
+
+    ssl_certificate     /etc/letsencrypt/live/qcm.exemple.fr/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/qcm.exemple.fr/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+
+    # HSTS : l'application impose HTTPS (SPEC §17). À n'activer qu'une fois le
+    # certificat confirmé — un en-tête HSTS erroné rend le site inaccessible
+    # pour la durée annoncée, sans recours côté serveur.
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    # L'application ne charge aucune ressource tierce et n'embarque aucun
+    # traceur (SPEC §18) : la politique peut donc être stricte.
+    add_header Content-Security-Policy "default-src 'self'; frame-ancestors 'none'" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "same-origin" always;
+
+    # Une copie d'élève n'a rien à faire dans un cache intermédiaire.
+    proxy_no_cache 1;
+    proxy_cache_bypass 1;
+
+    # API et façade MCP. Même origine que le front : ni CORS, ni préflight, et
+    # le cookie de session reste SameSite=Strict.
+    location /api/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        # Ajoute l'adresse du pair à la suite de la chaîne. L'API ne retient que
+        # la dernière valeur, et uniquement si elle provient d'un réseau déclaré
+        # dans TRUSTED_PROXY_CIDRS — sans quoi n'importe qui pourrait forger
+        # son adresse et contourner la limitation des tentatives.
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # La correction et la remise de copie ne doivent pas être interrompues.
+        proxy_read_timeout 120s;
+    }
+
+    location /mcp {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Transport MCP en flux : la mise en tampon romprait le streaming.
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+    }
+
+    # Front Next.js.
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        "upgrade";
+    }
+}

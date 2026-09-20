@@ -952,21 +952,29 @@ transport HTTP sous forme de service Tower, monté dans le routeur Axum ; les
 handlers d'outils accèdent aux en-têtes de la requête, donc au même contexte
 d'authentification que l'API REST.
 
-Le tout est déployable avec Docker Compose.
+## Hébergement retenu
 
-Éventuellement :
+Serveur **Debian Trixie**, conteneurs Docker, **Nginx en frontal** assurant la
+terminaison TLS :
 
 ```text
-Nginx
-  ↓
-frontend
-
-/api/*  et  /mcp
-  ↓
-API Rust
-
-PostgreSQL
+Internet ──TLS──> Nginx (hôte)
+                    ├── /api/, /mcp ──> 127.0.0.1:3000  conteneur api
+                    └── /           ──> 127.0.0.1:3001  front
+                                          │
+                                          └── postgres (réseau Docker)
 ```
+
+Les conteneurs ne publient leurs ports que sur la boucle locale : seul Nginx est
+exposé au réseau.
+
+Le front et l'API partageant la même origine, aucune configuration CORS n'est
+nécessaire et le cookie de session conserve `SameSite=Strict`.
+
+L'API ne voyant plus que l'adresse du proxy, `X-Forwarded-For` est lu — mais
+uniquement depuis un réseau explicitement déclaré, faute de quoi la limitation
+des tentatives de connexion serait contournable par simple forgeage d'en-tête.
+Voir [ADR-0008](docs/adr/0008-deploiement-nginx-docker.md).
 
 Un stockage objet compatible S3 pourra être ajouté ultérieurement pour les
 images intégrées aux questions.

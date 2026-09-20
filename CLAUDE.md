@@ -220,6 +220,17 @@ l'API : `dotenvy` remonte l'arborescence, on peut donc lancer depuis `api/`
 comme depuis la racine. Deux fichiers `.env` finiraient par diverger sur le mot
 de passe.
 
+Pile complète en conteneurs (ce que fait la production) :
+
+```bash
+docker compose up -d --build     # postgres + api
+docker compose logs -f api
+```
+
+Déploiement : Debian Trixie, Docker, Nginx en frontal pour TLS. Voir
+[deploy/README.md](deploy/README.md) — et en particulier `TRUSTED_PROXY_CIDRS`,
+qui n'a pas de valeur par défaut sûre.
+
 Les migrations sont appliquées au démarrage par `sqlx::migrate!`, il n'y a donc
 pas d'étape manuelle. Le port hôte par défaut est 5434 parce que 5432 et 5433
 sont déjà occupés par d'autres projets sur le poste de développement ;

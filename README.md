@@ -156,6 +156,11 @@ curl localhost:3000/api/health
 
 Tests du backend : `cd api && cargo test`.
 
+Pile complète en conteneurs, comme en production : `docker compose up -d --build`.
+
+Déploiement visé : Debian Trixie, Docker, Nginx en frontal pour TLS — voir
+[deploy/README.md](deploy/README.md).
+
 ---
 
 ## Documentation
@@ -163,6 +168,7 @@ Tests du backend : `cd api && cargo test`.
 - [SPEC.md](SPEC.md) — spécification fonctionnelle complète, référence du projet.
 - [CLAUDE.md](CLAUDE.md) — invariants et règles d'ingénierie, à lire avant de contribuer.
 - [docs/adr/](docs/adr/) — décisions d'architecture et leurs raisons.
+- [deploy/](deploy/) — topologie d'hébergement et exemple de configuration Nginx.
 
 ## Licence
 

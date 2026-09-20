@@ -1,5 +1,7 @@
 use std::env;
 
+use ipnet::IpNet;
+
 /// Configuration lue depuis l'environnement au démarrage.
 ///
 /// Toute valeur manquante est une erreur fatale : on refuse de démarrer à
@@ -9,6 +11,12 @@ pub struct Config {
     pub database_url: String,
     pub bind_addr: String,
     pub auth: AuthConfig,
+    /// Réseaux depuis lesquels `X-Forwarded-For` est digne de foi.
+    ///
+    /// Vide par défaut : sans configuration explicite, l'application ne croit
+    /// personne et s'en tient à l'adresse du pair. Un défaut permissif serait
+    /// une faille silencieuse en développement comme en production.
+    pub trusted_proxies: Vec<IpNet>,
 }
 
 /// Identifiants de l'unique enseignant de l'instance.
@@ -41,8 +49,21 @@ impl Config {
                 username: required("TEACHER_USERNAME")?,
                 password_hash: required("TEACHER_PASSWORD_HASH")?,
             },
+            trusted_proxies: trusted_proxies()?,
         })
     }
+}
+
+fn trusted_proxies() -> Result<Vec<IpNet>, String> {
+    let raw = env::var("TRUSTED_PROXY_CIDRS").unwrap_or_default();
+    raw.split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            s.parse::<IpNet>()
+                .map_err(|e| format!("TRUSTED_PROXY_CIDRS : `{s}` invalide ({e})"))
+        })
+        .collect()
 }
 
 fn required(key: &str) -> Result<String, String> {

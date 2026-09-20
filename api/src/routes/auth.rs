@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 
 use axum::extract::{ConnectInfo, State};
 use axum::http::header::SET_COOKIE;
+use axum::http::HeaderMap;
 use axum::response::{AppendHeaders, IntoResponse};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -49,9 +50,10 @@ pub struct AgentIdentity {
 async fn login(
     State(state): State<AppState>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     Json(creds): Json<Credentials>,
 ) -> Result<impl IntoResponse, AppError> {
-    let ip = peer.ip();
+    let ip = auth::client_ip(peer.ip(), &headers, &state.trusted_proxies);
     if !state.limiter.allow(ip) {
         tracing::warn!(%ip, "connexion : quota de tentatives dépassé");
         return Err(AppError::TooManyRequests);

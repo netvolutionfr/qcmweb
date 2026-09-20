@@ -55,10 +55,21 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => tracing::warn!(error = %e, "purge des sessions impossible"),
     }
 
+    if config.trusted_proxies.is_empty() {
+        tracing::warn!(
+            "TRUSTED_PROXY_CIDRS vide : X-Forwarded-For sera ignoré. \
+             Correct en accès direct, mais derrière un reverse proxy la \
+             limitation des tentatives comptera toutes les connexions ensemble."
+        );
+    } else {
+        tracing::info!(proxies = ?config.trusted_proxies, "proxies de confiance");
+    }
+
     let state = AppState {
         db,
         auth: Arc::new(config.auth.clone()),
         limiter: Arc::new(LoginLimiter::new()),
+        trusted_proxies: Arc::new(config.trusted_proxies.clone()),
     };
 
     let app = routes::router(state).layer(TraceLayer::new_for_http());
@@ -67,10 +78,8 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!(addr = %config.bind_addr, "API démarrée");
 
     // `into_make_service_with_connect_info` : la limitation des tentatives de
-    // connexion a besoin de l'adresse du pair.
-    // ponytail: derrière un reverse proxy, toutes les requêtes porteront l'IP
-    // du proxy. Lire X-Forwarded-For le jour où il y en a un, et uniquement
-    // s'il est de confiance.
+    // connexion a besoin de l'adresse du pair, que `auth::client_ip` complète
+    // avec `X-Forwarded-For` lorsque ce pair est un proxy de confiance.
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),

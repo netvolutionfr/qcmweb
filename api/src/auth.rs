@@ -230,7 +230,38 @@ fn bearer(parts: &Parts) -> Option<String> {
 // Limitation des tentatives
 // ---------------------------------------------------------------------------
 
+/// Détermine l'adresse du client derrière un reverse proxy.
+///
+/// Sans cette étape, dans la topologie de production (Nginx en frontal), toutes
+/// les requêtes porteraient l'adresse du proxy. La limitation par IP
+/// deviendrait une limitation globale, et n'importe qui pourrait verrouiller
+/// l'enseignant hors de son instance en épuisant le quota — exactement ce que
+/// le comptage par IP visait à empêcher.
+///
+/// `X-Forwarded-For` n'est lu **que si le pair est un proxy déclaré de
+/// confiance**. Un en-tête est trivial à forger : le lire inconditionnellement
+/// permettrait à un attaquant d'annoncer une adresse différente à chaque
+/// tentative et de contourner entièrement la limitation.
+///
+/// La valeur retenue est la **dernière** de la liste : c'est celle que le proxy
+/// de confiance vient d'ajouter. Les valeurs précédentes peuvent avoir été
+/// forgées par le client.
+pub fn client_ip(peer: IpAddr, headers: &axum::http::HeaderMap, trusted: &[ipnet::IpNet]) -> IpAddr {
+    if !trusted.iter().any(|net| net.contains(&peer)) {
+        return peer;
+    }
+    headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.rsplit(',').next())
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(peer)
+}
+
 /// Fenêtre fixe par adresse IP sur l'endpoint de connexion (SPEC §17).
+///
+/// L'adresse est celle rendue par [`client_ip`], donc l'adresse réelle du
+/// client et non celle du reverse proxy.
 ///
 /// ponytail: compteur en mémoire, remis à zéro au redémarrage et non partagé
 /// entre instances. Suffisant pour une instance unique ; passer à Postgres ou
@@ -351,6 +382,57 @@ mod tests {
         }
         limiter.reset(ip);
         assert!(limiter.allow(ip));
+    }
+
+    fn headers(xff: Option<&str>) -> axum::http::HeaderMap {
+        let mut h = axum::http::HeaderMap::new();
+        if let Some(v) = xff {
+            h.insert("x-forwarded-for", v.parse().unwrap());
+        }
+        h
+    }
+
+    fn cidr(s: &str) -> Vec<ipnet::IpNet> {
+        vec![s.parse().unwrap()]
+    }
+
+    #[test]
+    fn sans_proxy_de_confiance_len_tete_est_ignore() {
+        let peer: IpAddr = "203.0.113.9".parse().unwrap();
+        assert_eq!(
+            client_ip(peer, &headers(Some("1.2.3.4")), &[]),
+            peer,
+            "un client non déclaré de confiance ne doit pas pouvoir annoncer son IP"
+        );
+    }
+
+    #[test]
+    fn proxy_de_confiance_len_tete_est_lu() {
+        let peer: IpAddr = "172.18.0.1".parse().unwrap();
+        assert_eq!(
+            client_ip(peer, &headers(Some("198.51.100.7")), &cidr("172.16.0.0/12")),
+            "198.51.100.7".parse::<IpAddr>().unwrap()
+        );
+    }
+
+    #[test]
+    fn chaine_forgee_la_derniere_valeur_prime() {
+        // Le client envoie « 1.2.3.4 », Nginx ajoute son propre pair derrière.
+        let peer: IpAddr = "172.18.0.1".parse().unwrap();
+        assert_eq!(
+            client_ip(peer, &headers(Some("1.2.3.4, 198.51.100.7")), &cidr("172.16.0.0/12")),
+            "198.51.100.7".parse::<IpAddr>().unwrap(),
+            "la valeur ajoutée par le proxy de confiance doit primer sur la valeur forgée"
+        );
+    }
+
+    #[test]
+    fn en_tete_absent_ou_illisible_retombe_sur_le_pair() {
+        let peer: IpAddr = "172.18.0.1".parse().unwrap();
+        let trusted = cidr("172.16.0.0/12");
+        assert_eq!(client_ip(peer, &headers(None), &trusted), peer);
+        assert_eq!(client_ip(peer, &headers(Some("pas-une-ip")), &trusted), peer);
+        assert_eq!(client_ip(peer, &headers(Some("")), &trusted), peer);
     }
 
     #[test]
