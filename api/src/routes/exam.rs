@@ -26,6 +26,7 @@ use crate::state::AppState;
 pub fn router() -> OpenApiRouter<AppState> {
     OpenApiRouter::new()
         .routes(routes!(login))
+        .routes(routes!(whoami))
         .routes(routes!(join))
         .routes(routes!(start))
         .routes(routes!(answer))
@@ -173,6 +174,24 @@ async fn login(
 // Composition
 // ---------------------------------------------------------------------------
 
+/// Vérifie qu'une session de participant est valide.
+///
+/// Pendant du `/api/auth/me` de l'enseignant. Sans lui, le front devrait
+/// sonder une autre route et interpréter son refus, ce qui mêlerait deux
+/// significations dans un même code de statut.
+#[utoipa::path(
+    get,
+    path = "/api/auth/participant",
+    responses((status = 200), (status = 401)),
+    tag = "eleve",
+)]
+async fn whoami(participant: Participant) -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "authenticated": true,
+        "group_id": participant.group_id,
+    }))
+}
+
 /// Présente les consignes d'une évaluation à partir de son code.
 #[utoipa::path(
     post,
@@ -266,9 +285,12 @@ async fn start(
                 OffsetDateTime::now_utc() + time::Duration::minutes((minutes + extra_minutes) as i64)
             });
 
-            let (new_id,): (Uuid,) = sqlx::query_as(
+            // On relit l'échéance telle qu'elle a été stockée : PostgreSQL
+            // tronque à la microseconde, et renvoyer la valeur calculée ferait
+            // différer la première réponse de toutes les suivantes.
+            let (new_id, stored): (Uuid, Option<OffsetDateTime>) = sqlx::query_as(
                 "INSERT INTO attempts (assessment_id, participant_id, seed, deadline)
-                 VALUES ($1, $2, $3, $4) RETURNING id",
+                 VALUES ($1, $2, $3, $4) RETURNING id, deadline",
             )
             .bind(id)
             .bind(participant.id)
@@ -277,7 +299,7 @@ async fn start(
             .fetch_one(&state.db)
             .await?;
 
-            (new_id, seed, deadline)
+            (new_id, seed, stored)
         }
     };
 

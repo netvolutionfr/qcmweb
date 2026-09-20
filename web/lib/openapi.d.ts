@@ -256,6 +256,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/participant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vérifie qu'une session de participant est valide.
+         * @description Pendant du `/api/auth/me` de l'enseignant. Sans lui, le front devrait
+         *     sonder une autre route et interpréter son refus, ce qui mêlerait deux
+         *     significations dans un même code de statut.
+         */
+        get: operations["whoami"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/token": {
         parameters: {
             query?: never;
@@ -1436,6 +1458,29 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Identity"];
                 };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    whoami: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             401: {
                 headers: {

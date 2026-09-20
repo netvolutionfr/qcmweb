@@ -6,11 +6,13 @@ pour l'enseignement secondaire et supérieur court.
 L'objectif tient en une phrase : en moins de cinq minutes, passer d'un fichier
 YAML à une évaluation accessible à une classe.
 
-> **État du projet : embryonnaire.** La spécification fonctionnelle est écrite,
-> le backend démarre, le format `qcm/v1` est modélisé et validé, et
-> l'authentification des deux principaux fonctionne. Il n'y a pas encore
-> d'interface, pas de façade MCP, et rien de tout cela n'est utilisable en
-> classe.
+> **État du projet : le scénario du MVP fonctionne de bout en bout.** Un
+> enseignant crée un groupe, imprime des billets, relit et valide un sujet
+> déposé, ouvre une évaluation ; un élève s'y connecte, compose, remet sa copie
+> et reçoit son retour ; l'enseignant consulte les résultats et les exporte.
+>
+> Manquent encore la façade MCP, le recalcul après neutralisation d'une
+> question, et l'épreuve du terrain. Rien n'a encore servi en classe.
 
 ---
 

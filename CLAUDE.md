@@ -268,18 +268,21 @@ Arborescence du front :
 web/
   app/
     layout.tsx           polices, thème, métadonnées
+    page.tsx             aiguillage élève / enseignant
     connexion/           public
-    (app)/               écrans authentifiés
-      layout.tsx         garde de session + en-tête
-      billets/
+    (app)/               espace enseignant : garde de session + en-tête
+      sujets/ evaluations/ billets/
+    (eleve)/             parcours élève : coque nue, sans navigation
+      eleve/ eleve/connexion/ eleve/epreuve/[id]/
   components/
     ui/                  shadcn, copié dans le dépôt donc modifiable
-    billets/
+    billets/ sujets/ evaluations/ eleve/
   lib/
-    api.ts               client typé, même origine
+    api.ts               client typé, même origine ; `api` et `student`
     openapi.d.ts         généré, ne jamais éditer
     roster.ts            lecture CSV et jointure — strictement locale
     billets-pdf.ts       planche A4 composée au millimètre — locale aussi
+    exam-storage.ts      file d'attente hors ligne et correction d'horloge
 ```
 
 Règles du front :
@@ -291,7 +294,16 @@ Règles du front :
 - **Thème par `prefers-color-scheme`**, pas par classe : aucune dépendance,
   aucun flash avant hydratation. Une bascule manuelle exigerait `next-themes`
   et le retour au variant par classe (voir ADR-0009).
-- **Mobile d'abord.** Le parcours élève se fera en salle, sur téléphone.
+- **Mobile d'abord.** Le parcours élève se fera en salle, sur téléphone. Sa
+  coque ne comporte aucune navigation : un élève en épreuve n'a qu'une chose à
+  faire, et chaque élément superflu est une occasion de se perdre.
+- **Le temps vient du serveur.** Le compte à rebours se calcule depuis
+  `server_time`, corrigé du temps écoulé localement. L'horloge d'un poste de
+  salle informatique est régulièrement fausse de plusieurs minutes.
+- **Le stockage local ne conserve que des réponses en attente d'envoi**, jamais
+  un score ni un horodatage, et chaque accès est protégé : en navigation privée
+  `localStorage` lève au lieu de renvoyer null, et une épreuve ne doit pas
+  s'interrompre pour autant.
 - La garde de session côté client n'est pas un contrôle de sécurité :
   l'autorisation est vérifiée par le serveur à chaque requête.
 

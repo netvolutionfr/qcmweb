@@ -11,6 +11,10 @@ export type Choice = components["schemas"]["Choice"];
 export type Assessment = components["schemas"]["Assessment"];
 export type ResultsTable = components["schemas"]["ResultsTable"];
 export type ResultRow = components["schemas"]["ResultRow"];
+export type Briefing = components["schemas"]["Briefing"];
+export type Sitting = components["schemas"]["Sitting"];
+export type ExamQuestion = components["schemas"]["ExamQuestion"];
+export type AttemptResult = components["schemas"]["AttemptResult"];
 
 export class ApiError extends Error {
   constructor(
@@ -87,6 +91,30 @@ export const api = {
 
   /** Résultats pseudonymisés : des jetons, jamais des noms. */
   results: (id: string) => call<ResultsTable>(`/api/assessments/${id}/results`),
+};
+
+/** Parcours élève. */
+export const student = {
+  /** Vérifie la session élève. Pendant du `/api/auth/me` enseignant. */
+  me: () => call<{ authenticated: boolean; group_id: string }>("/api/auth/participant"),
+
+  login: (token: string, secret: string) =>
+    post<{ authenticated: boolean }>("/api/auth/token", { token, secret }),
+
+  join: (code: string) => post<Briefing>(`/api/join/${encodeURIComponent(code)}`),
+
+  /** Démarre une tentative, ou reprend celle qui est en cours. */
+  sit: (assessmentId: string) => post<Sitting>(`/api/assessments/${assessmentId}/attempts`),
+
+  answer: (attemptId: string, question: string, choices: string[]) =>
+    call<{ saved: boolean }>(
+      `/api/attempts/${attemptId}/answers/${encodeURIComponent(question)}`,
+      { method: "PUT", body: JSON.stringify({ choices }) },
+    ),
+
+  submit: (attemptId: string) => post<AttemptResult>(`/api/attempts/${attemptId}/submit`),
+
+  result: (attemptId: string) => call<AttemptResult>(`/api/attempts/${attemptId}/result`),
 };
 
 /** Année scolaire courante, bascule au 1er août. */

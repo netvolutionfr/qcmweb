@@ -1108,6 +1108,7 @@ POST   /api/auth/logout                     ferme la session
 GET    /api/auth/me                         valide la session enseignant
 GET    /api/auth/agent                      valide une clé d'API, rend son scope
 POST   /api/auth/token                      participant : jeton + secret
+GET    /api/auth/participant                valide la session élève
 
 GET    /api/groups
 POST   /api/groups
