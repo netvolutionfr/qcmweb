@@ -2,6 +2,12 @@ import type { components } from "./openapi";
 
 export type Group = components["schemas"]["Group"];
 export type IssuedParticipant = components["schemas"]["IssuedParticipant"];
+export type Subject = components["schemas"]["Subject"];
+export type SubjectDetail = components["schemas"]["SubjectDetail"];
+export type SubjectVersion = components["schemas"]["SubjectVersion"];
+export type QcmDocument = components["schemas"]["Document"];
+export type Question = components["schemas"]["Question"];
+export type Choice = components["schemas"]["Choice"];
 
 export class ApiError extends Error {
   constructor(
@@ -47,6 +53,26 @@ export const api = {
 
   issueTokens: (groupId: string, count: number) =>
     post<IssuedParticipant[]>(`/api/groups/${groupId}/participants`, { count }),
+
+  subjects: () => call<Subject[]>("/api/subjects"),
+
+  subject: (id: string) => call<SubjectDetail>(`/api/subjects/${id}`),
+
+  /**
+   * Document complet d'une version : bonnes réponses et explications comprises.
+   *
+   * Réservé à l'enseignant qui relit. Le parcours élève passera par un tout
+   * autre point d'entrée, où le serveur retire ces champs avant l'envoi
+   * (SPEC §12) — les masquer à l'affichage ne serait pas une protection.
+   */
+  subjectDocument: (id: string, version: number) =>
+    call<QcmDocument>(`/api/subjects/${id}/versions/${version}`),
+
+  validateVersion: (id: string, version: number) =>
+    post<SubjectVersion>(`/api/subjects/${id}/versions/${version}/validate`),
+
+  archiveSubject: (id: string, archived: boolean) =>
+    post<Subject>(`/api/subjects/${id}/archive`, { archived }),
 };
 
 /** Année scolaire courante, bascule au 1er août. */

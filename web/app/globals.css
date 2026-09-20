@@ -165,3 +165,66 @@
     @apply font-sans;
   }
 }
+/* Coloration syntaxique (highlight.js) exprimée avec les jetons du thème :
+   une feuille de style importée serait figée en clair ou en sombre, alors que
+   l'interface suit la préférence système. */
+.hljs-comment,
+.hljs-quote {
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-type {
+  color: oklch(0.55 0.19 295);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: oklch(0.52 0.15 150);
+}
+.hljs-number,
+.hljs-built_in,
+.hljs-symbol {
+  color: oklch(0.56 0.15 45);
+}
+.hljs-title,
+.hljs-section,
+.hljs-name,
+.hljs-attr {
+  color: oklch(0.52 0.17 255);
+}
+.hljs-meta,
+.hljs-deletion {
+  color: oklch(0.55 0.16 25);
+}
+
+@media (prefers-color-scheme: dark) {
+  .hljs-keyword,
+  .hljs-selector-tag,
+  .hljs-literal,
+  .hljs-type {
+    color: oklch(0.78 0.14 295);
+  }
+  .hljs-string,
+  .hljs-regexp,
+  .hljs-addition {
+    color: oklch(0.78 0.13 150);
+  }
+  .hljs-number,
+  .hljs-built_in,
+  .hljs-symbol {
+    color: oklch(0.8 0.12 60);
+  }
+  .hljs-title,
+  .hljs-section,
+  .hljs-name,
+  .hljs-attr {
+    color: oklch(0.78 0.12 250);
+  }
+  .hljs-meta,
+  .hljs-deletion {
+    color: oklch(0.75 0.14 25);
+  }
+}

@@ -209,6 +209,148 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/subjects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Liste les sujets de la banque. */
+        get: operations["list"];
+        put?: never;
+        /** Dépose un nouveau sujet. Le résultat est **toujours un brouillon**. */
+        post: operations["deposit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/subjects/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyse un document `qcm/v1` sans rien écrire.
+         * @description Le corps est du texte brut : YAML 1.2 étant un sur-ensemble de JSON, un même
+         *     point d'entrée accepte les deux formats sans négociation de type.
+         *
+         *     Renvoie **toutes** les erreurs d'un coup : un agent qui corrige son fichier a
+         *     besoin de la liste complète, pas de la première anomalie rencontrée.
+         */
+        post: operations["validate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/subjects/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Détail d'un sujet et de toutes ses versions. */
+        get: operations["detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/subjects/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive ou désarchive un sujet. Réservé à l'enseignant. */
+        post: operations["archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/subjects/{id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ajoute une version à un sujet existant. Elle est elle aussi un brouillon.
+         * @description C'est le seul chemin de modification : une version déjà déposée est
+         *     immuable, y compris en base (SPEC §5).
+         */
+        post: operations["add_version"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/subjects/{id}/versions/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Document complet d'une version, tel qu'il a été déposé.
+         * @description Réservé aux principaux authentifiés : il contient les bonnes réponses et les
+         *     explications, qui ne doivent jamais atteindre le navigateur d'un élève
+         *     (SPEC §12).
+         */
+        get: operations["version_document"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/subjects/{id}/versions/{number}/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Valide une version : `DRAFT → VALIDATED`.
+         * @description **Réservé à l'enseignant.** C'est la porte de relecture humaine, et la
+         *     protection réelle contre un agent qui aurait lu des instructions hostiles
+         *     (ADR-0003). L'extracteur [`Teacher`] rend son contournement impossible à
+         *     écrire, pas seulement déconseillé.
+         */
+        post: operations["approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -216,9 +358,35 @@ export interface components {
         AgentIdentity: {
             scope: string;
         };
+        ArchiveTarget: {
+            archived: boolean;
+        };
+        Choice: {
+            correct?: boolean;
+            id: string;
+            text: string;
+        };
         Credentials: {
             password: string;
             username: string;
+        };
+        /**
+         * @description Sujet déposé : identifiant, version créée, et l'URL de relecture à rendre à
+         *     l'enseignant (SPEC §9).
+         */
+        Deposited: {
+            review_url: string;
+            status: string;
+            /** Format: uuid */
+            subject_id: string;
+            summary: components["schemas"]["Summary"];
+            /** Format: int32 */
+            version: number;
+        };
+        Document: {
+            metadata: components["schemas"]["Metadata"];
+            questions: components["schemas"]["Question"][];
+            schema: string;
         };
         Group: {
             /** Format: date-time */
@@ -249,9 +417,25 @@ export interface components {
             secret: string;
             token: string;
         };
+        Metadata: {
+            description?: string | null;
+            subject?: string | null;
+            tags?: string[];
+            title: string;
+        };
+        /** @enum {string} */
+        Mode: "exact" | "partial";
         MoveTarget: {
             /** Format: uuid */
             group_id: string;
+        };
+        MultipleChoice: components["schemas"]["Teaching"] & {
+            choices: components["schemas"]["Choice"][];
+            id: string;
+            /** Format: double */
+            points?: number;
+            prompt: string;
+            scoring?: components["schemas"]["Scoring"];
         };
         NewGroup: {
             /** @description Étiquette de classe : `1SIO`, `2SIO-SLAM`. Jamais un nom de personne. */
@@ -274,6 +458,93 @@ export interface components {
         Purged: {
             /** Format: int64 */
             participants: number;
+        };
+        /**
+         * @description Un enum plutôt qu'un `kind: String` accompagné de champs optionnels : les
+         *     états incohérents (un `true_false` porteur de propositions, un
+         *     `single_choice` doté d'un mode de notation partielle) sont inexprimables.
+         */
+        Question: (components["schemas"]["SingleChoice"] & {
+            /** @enum {string} */
+            type: "single_choice";
+        }) | (components["schemas"]["MultipleChoice"] & {
+            /** @enum {string} */
+            type: "multiple_choice";
+        }) | (components["schemas"]["TrueFalse"] & {
+            /** @enum {string} */
+            type: "true_false";
+        });
+        Scoring: {
+            mode?: components["schemas"]["Mode"];
+        };
+        SingleChoice: components["schemas"]["Teaching"] & {
+            choices: components["schemas"]["Choice"][];
+            id: string;
+            /** Format: double */
+            points?: number;
+            prompt: string;
+        };
+        Subject: {
+            archived: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            latest_status: string;
+            /** Format: int32 */
+            latest_version: number;
+            /** @description Titre de la version la plus récente. */
+            title: string;
+        };
+        SubjectDetail: components["schemas"]["Subject"] & {
+            versions: components["schemas"]["SubjectVersion"][];
+        };
+        SubjectVersion: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int32 */
+            number: number;
+            /** Format: int32 */
+            question_count: number;
+            /** @description `DRAFT` ou `VALIDATED`. */
+            status: string;
+            title: string;
+            /** Format: double */
+            total_points: number;
+            /** Format: date-time */
+            validated_at?: string | null;
+        };
+        Summary: {
+            /** Format: int32 */
+            question_count: number;
+            title: string;
+            /** Format: double */
+            total_points: number;
+        };
+        /**
+         * @description Champs pédagogiques communs, jamais transmis au navigateur de l'élève tant
+         *     que la configuration de l'évaluation n'en autorise pas la divulgation.
+         */
+        Teaching: {
+            explanation?: string | null;
+            objectives?: string[];
+        };
+        TrueFalse: components["schemas"]["Teaching"] & {
+            answer: boolean;
+            id: string;
+            /** Format: double */
+            points?: number;
+            prompt: string;
+        };
+        ValidationError: {
+            message: string;
+            /** @description Chemin dans le document, par exemple `questions[2].choices[1].id`. */
+            path: string;
+        };
+        Verdict: {
+            errors: components["schemas"]["ValidationError"][];
+            summary?: null | components["schemas"]["Summary"];
+            valid: boolean;
         };
     };
     responses: never;
@@ -587,6 +858,238 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["IssuedParticipant"];
                 };
+            };
+        };
+    };
+    list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Subject"][];
+                };
+            };
+        };
+    };
+    deposit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Document qcm/v1 en YAML ou JSON */
+        requestBody: {
+            content: {
+                "text/plain": string;
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deposited"];
+                };
+            };
+            /** @description document invalide */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    validate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Document qcm/v1 en YAML ou JSON */
+        requestBody: {
+            content: {
+                "text/plain": string;
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Verdict"];
+                };
+            };
+        };
+    };
+    detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubjectDetail"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveTarget"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Subject"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Document qcm/v1 en YAML ou JSON */
+        requestBody: {
+            content: {
+                "text/plain": string;
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deposited"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    version_document: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    approve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubjectVersion"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
