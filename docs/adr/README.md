@@ -30,3 +30,4 @@ sans alternative sérieuse, ou une décision déjà argumentée dans [SPEC.md](.
 | [0004](0004-mot-de-passe-enseignant.md) | Mot de passe fixé pour l'enseignant, passkeys reportées | Acceptée (provisoire) |
 | [0005](0005-cle-api-et-choix-du-hachage.md) | Clé d'API pour l'agent, et SHA-256 plutôt qu'Argon2id | Acceptée |
 | [0006](0006-serde-norway.md) | `serde_norway` plutôt que `serde_yaml` | Acceptée |
+| [0007](0007-format-des-codes.md) | Format et entropie des codes recopiés à la main | Acceptée |

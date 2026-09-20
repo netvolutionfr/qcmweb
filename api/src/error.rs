@@ -19,6 +19,12 @@ pub enum AppError {
     #[error("accès refusé")]
     Forbidden,
 
+    #[error("{0}")]
+    BadRequest(String),
+
+    #[error("{0}")]
+    Conflict(String),
+
     #[error("trop de tentatives")]
     TooManyRequests,
 
@@ -37,6 +43,10 @@ impl IntoResponse for AppError {
                 (StatusCode::UNAUTHORIZED, json!({ "error": self.to_string() }))
             }
             AppError::Forbidden => (StatusCode::FORBIDDEN, json!({ "error": self.to_string() })),
+            AppError::BadRequest(_) => {
+                (StatusCode::BAD_REQUEST, json!({ "error": self.to_string() }))
+            }
+            AppError::Conflict(_) => (StatusCode::CONFLICT, json!({ "error": self.to_string() })),
             AppError::TooManyRequests => (
                 StatusCode::TOO_MANY_REQUESTS,
                 json!({ "error": self.to_string() }),

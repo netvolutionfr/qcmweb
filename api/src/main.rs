@@ -1,4 +1,5 @@
 mod admin;
+mod audit;
 mod auth;
 mod config;
 mod domain;
