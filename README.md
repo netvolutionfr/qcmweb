@@ -132,7 +132,8 @@ des réponses, la durée et le nombre de tentatives.
 ## Stack
 
 ```
-Navigateur   Next.js · TypeScript · types générés depuis OpenAPI
+Navigateur   Next.js · TypeScript · Tailwind · shadcn/ui
+             types générés depuis OpenAPI, thème lié au système
 Agent IA     client MCP
      │ /api/*  et  /mcp
    API        Rust · Axum · Tokio · Serde · SQLx · utoipa · rmcp
@@ -154,7 +155,9 @@ cd api && cargo run             # applique les migrations puis sert l'API
 curl localhost:3000/api/health
 ```
 
-Tests du backend : `cd api && cargo test`.
+Front : `cd web && npm run dev` (port 3001, proxifie `/api` vers le backend).
+
+Tests : `cd api && cargo test` et `cd web && npm test`.
 
 Pile complète en conteneurs, comme en production : `docker compose up -d --build`.
 

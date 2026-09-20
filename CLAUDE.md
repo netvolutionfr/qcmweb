@@ -236,6 +236,18 @@ pas d'étape manuelle. Le port hôte par défaut est 5434 parce que 5432 et 5433
 sont déjà occupés par d'autres projets sur le poste de développement ;
 `POSTGRES_PORT` permet d'en changer.
 
+Front :
+
+```bash
+cd web && npm run dev        # port 3001, proxifie /api vers le backend
+cd web && npm run types      # régénère lib/openapi.d.ts depuis l'OpenAPI
+cd web && npm test           # node --test sur la logique pure
+cd web && npm run typecheck
+```
+
+`npm run types` exige que le backend tourne. À relancer **dès qu'une route ou un
+schéma change** : un type écrit à la main est une régression, pas un raccourci.
+
 Arborescence du backend :
 
 ```
@@ -249,6 +261,36 @@ api/
     routes/           façade REST
     domain/qcm.rs     modèle natif qcm/v1 et validations métier
 ```
+
+Arborescence du front :
+
+```
+web/
+  app/
+    layout.tsx           polices, thème, métadonnées
+    connexion/           public
+    (app)/               écrans authentifiés
+      layout.tsx         garde de session + en-tête
+      billets/
+  components/
+    ui/                  shadcn, copié dans le dépôt donc modifiable
+    billets/
+  lib/
+    api.ts               client typé, même origine
+    openapi.d.ts         généré, ne jamais éditer
+    roster.ts            lecture CSV et jointure — strictement locale
+```
+
+Règles du front :
+
+- **`lib/roster.ts` ne doit jamais appeler `fetch`.** C'est le module qui
+  manipule les noms ; l'invariant RGPD tient à ce qu'il reste hors réseau.
+- **Thème par `prefers-color-scheme`**, pas par classe : aucune dépendance,
+  aucun flash avant hydratation. Une bascule manuelle exigerait `next-themes`
+  et le retour au variant par classe (voir ADR-0009).
+- **Mobile d'abord.** Le parcours élève se fera en salle, sur téléphone.
+- La garde de session côté client n'est pas un contrôle de sécurité :
+  l'autorisation est vérifiée par le serveur à chaque requête.
 
 Les types TypeScript sont **générés** depuis l'OpenAPI produit par utoipa. Ne
 jamais écrire à la main un type qui décrit une réponse d'API.

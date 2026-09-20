@@ -32,3 +32,4 @@ sans alternative sérieuse, ou une décision déjà argumentée dans [SPEC.md](.
 | [0006](0006-serde-norway.md) | `serde_norway` plutôt que `serde_yaml` | Acceptée |
 | [0007](0007-format-des-codes.md) | Format et entropie des codes recopiés à la main | Acceptée |
 | [0008](0008-deploiement-nginx-docker.md) | Déploiement Docker derrière Nginx, confiance du proxy | Acceptée |
+| [0009](0009-stack-frontend.md) | Next.js, Tailwind, shadcn/ui, thème système sans JavaScript | Acceptée |

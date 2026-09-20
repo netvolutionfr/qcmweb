@@ -4,20 +4,21 @@ use axum::extract::{ConnectInfo, State};
 use axum::http::header::SET_COOKIE;
 use axum::http::HeaderMap;
 use axum::response::{AppendHeaders, IntoResponse};
-use axum::routing::{get, post};
-use axum::{Json, Router};
+use axum::Json;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{self, Agent, Teacher, SESSION_COOKIE, SESSION_TTL};
 use crate::error::AppError;
 use crate::state::AppState;
 
-pub fn router() -> Router<AppState> {
-    Router::new()
-        .route("/api/auth/login", post(login))
-        .route("/api/auth/logout", post(logout))
-        .route("/api/auth/me", get(me))
-        .route("/api/auth/agent", get(agent))
+pub fn router() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(login))
+        .routes(routes!(logout))
+        .routes(routes!(me))
+        .routes(routes!(agent))
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]

@@ -1,6 +1,7 @@
 use axum::extract::State;
-use axum::routing::get;
-use axum::{Json, Router};
+use axum::Json;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 use serde::Serialize;
 
 use crate::error::AppError;
@@ -11,8 +12,8 @@ pub struct Health {
     status: &'static str,
 }
 
-pub fn router() -> Router<AppState> {
-    Router::new().route("/api/health", get(health))
+pub fn router() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new().routes(routes!(health))
 }
 
 /// Vérifie que l'API répond et que la base est joignable.
@@ -20,6 +21,7 @@ pub fn router() -> Router<AppState> {
     get,
     path = "/api/health",
     responses((status = 200, body = Health)),
+    tag = "systeme",
 )]
 async fn health(State(state): State<AppState>) -> Result<Json<Health>, AppError> {
     sqlx::query("SELECT 1").execute(&state.db).await?;

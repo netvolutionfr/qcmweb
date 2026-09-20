@@ -1,6 +1,7 @@
 use axum::extract::{Path, State};
-use axum::routing::{get, post};
-use axum::{Json, Router};
+use axum::Json;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -15,17 +16,14 @@ use crate::state::AppState;
 /// cette taille : au-delà, c'est une faute de frappe, pas une intention.
 const MAX_PARTICIPANTS: i64 = 300;
 
-pub fn router() -> Router<AppState> {
-    Router::new()
-        .route("/api/groups", get(list).post(create))
-        .route(
-            "/api/groups/{id}/participants",
-            get(list_participants).post(create_participants),
-        )
-        .route("/api/groups/{id}/purge", post(purge))
-        .route("/api/participants/{id}/reset-secret", post(reset_secret))
-        .route("/api/participants/{id}/deactivate", post(deactivate))
-        .route("/api/participants/{id}/move", post(move_to_group))
+pub fn router() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(list, create))
+        .routes(routes!(list_participants, create_participants))
+        .routes(routes!(purge))
+        .routes(routes!(reset_secret))
+        .routes(routes!(deactivate))
+        .routes(routes!(move_to_group))
 }
 
 // ---------------------------------------------------------------------------
