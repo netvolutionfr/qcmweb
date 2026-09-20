@@ -177,11 +177,29 @@ classement, texte à trous, correction manuelle, OIDC/LDAP/ENT.
 ## 7. Commandes
 
 ```bash
-docker compose up -d          # postgres + api + web
-cargo test                    # api/   tests backend
-cargo sqlx migrate run        # api/   migrations
-npm run dev                   # web/   frontend
-npm run typecheck             # web/
+docker compose up -d postgres   # Postgres, exposé sur le port hôte 5434
+cd api && cp .env.example .env  # une fois
+cd api && cargo run             # applique les migrations puis sert l'API
+cd api && cargo test            # tests backend
+curl localhost:3000/api/health  # vérifie API + base
+```
+
+Les migrations sont appliquées au démarrage par `sqlx::migrate!`, il n'y a donc
+pas d'étape manuelle. Le port hôte est 5434 parce que 5432 et 5433 sont déjà
+occupés par d'autres projets sur le poste de développement.
+
+Arborescence du backend :
+
+```
+api/
+  migrations/         SQL, appliqué au démarrage
+  src/
+    main.rs           amorçage : tracing, config, pool, migrations, serve
+    config.rs         lecture de l'environnement, échec au démarrage
+    state.rs          AppState partagé
+    error.rs          AppError -> réponse HTTP, jamais de détail SQL au client
+    routes/           façade REST
+    domain/qcm.rs     modèle natif qcm/v1 et validations métier
 ```
 
 Les types TypeScript sont **générés** depuis l'OpenAPI produit par utoipa. Ne
