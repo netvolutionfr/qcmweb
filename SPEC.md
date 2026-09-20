@@ -622,7 +622,9 @@ pour éviter qu'un étudiant ayant terminé rapidement transmette les réponses 
 
 # 11. Code d'évaluation
 
-Lorsqu'une évaluation est publiée, un code court est généré, par exemple :
+Le code court est généré **dès la création** de l'évaluation, afin qu'un agent
+puisse le restituer immédiatement. L'évaluation naît fermée : connaître le code
+à l'avance ne donne accès à rien. Par exemple :
 
 ```text
 K7MP4Q
@@ -647,6 +649,12 @@ Le code d'évaluation :
 Il joue en revanche le rôle de second facteur contextuel : connaître un jeton
 ne suffit pas à composer, encore faut-il que l'évaluation soit ouverte et que
 le groupe du jeton y soit autorisé.
+
+Une évaluation n'est composable que si l'enseignant l'a **ouverte** *et* que
+l'instant se situe dans sa **fenêtre planifiée**, lorsqu'elle est renseignée.
+Les deux mécanismes se complètent : la fenêtre prépare et programme, l'état
+permet de refermer d'un geste. Voir
+[ADR-0011](docs/adr/0011-ouverture-et-fenetre.md).
 
 Le workflow participant devient :
 
@@ -1120,10 +1128,11 @@ GET    /api/subjects/{id}/versions/{n}      document complet
 POST   /api/subjects/{id}/versions/{n}/validate   DRAFT -> VALIDATED, enseignant seul
 POST   /api/subjects/{id}/archive           enseignant seul
 
-POST   /api/assessments
+GET    /api/assessments
+POST   /api/assessments                     exige une version validée
 GET    /api/assessments/{id}
-POST   /api/assessments/{id}/open
-POST   /api/assessments/{id}/close
+POST   /api/assessments/{id}/open           enseignant seul
+POST   /api/assessments/{id}/close          enseignant seul
 
 POST   /api/join/{code}
 
