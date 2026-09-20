@@ -123,6 +123,35 @@ document hostile ne peut, au pire, que déposer un brouillon indésirable. La
 porte `DRAFT → VALIDATED` humaine est la protection réelle. Ne jamais
 l'automatiser, même « pour les évaluations formatives ».
 
+## Authentification
+
+Deux principaux, deux mécanismes, jamais interchangeables :
+
+| | Enseignant | Agent |
+|---|---|---|
+| preuve | mot de passe Argon2id | clé d'API |
+| transport | cookie de session `HttpOnly` | `Authorization: Bearer` |
+| stockage | empreinte Argon2id (config) | empreinte SHA-256 (base) |
+| extracteur | `Teacher` | `Agent` |
+
+Règles :
+
+- **Argon2id pour les mots de passe, SHA-256 pour les clés.** Un KDF ne sert
+  qu'à ralentir la recherche exhaustive d'un secret *devinable* ; sur 256 bits
+  aléatoires il ne ferait que coûter 100 ms par requête d'agent.
+- **La base ne contient jamais un secret en clair**, ni mot de passe, ni jeton
+  de session, ni clé. Uniquement des empreintes.
+- **Un handler protégé prend `Teacher` ou `Agent` en argument.** L'absence du
+  type est alors une erreur de compilation, pas un middleware oublié.
+- **Pas d'inscription, pas de réinitialisation en libre-service.** L'instance
+  sert un seul enseignant. Un courriel de récupération supposerait exactement le
+  type de donnée que l'application refuse de détenir.
+- **Passkeys reportées**, pas abandonnées : elles remplaceront le mot de passe.
+  Ne pas empiler d'astuces autour du mot de passe en attendant.
+- **Les clés se créent en ligne de commande** (`cargo run -- mint-key <libellé>`),
+  s'affichent une fois, et vivent dans la configuration du client MCP — jamais
+  dans une conversation.
+
 Outils MCP et ressource : voir SPEC.md §9. Les outils sont taillés pour la
 tâche, pas transposés un à un depuis les routes REST — un pont OpenAPI→MCP
 générique produirait une surface inutilisable par un agent.
@@ -220,8 +249,8 @@ jamais écrire à la main un type qui décrit une réponse d'API.
 - Identifiants exposés à l'extérieur : UUID ou aléatoires, jamais séquentiels.
 - Codes d'évaluation et jetons : alphabet sans caractères ambigus
   (`0/O`, `1/I/l`), entropie suffisante pour interdire l'énumération.
-- Secrets hachés en **Argon2id**. Limitation du débit sur les endpoints
-  d'authentification.
+- Secrets **jamais stockés en clair** ; voir la section Authentification pour le
+  choix de l'empreinte selon l'entropie du secret.
 - Les opérations sensibles (modification de note, recalcul, purge) écrivent un
   `AuditEvent`.
 - **Aucun secret dans un fichier versionné**, y compris un mot de passe de

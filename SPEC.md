@@ -1,5 +1,9 @@
-# Plateforme QCM — Spécification fonctionnelle v0.3
+# Plateforme QCM — Spécification fonctionnelle v0.4
 
+> v0.4 — authentification : mot de passe fixé et session pour l'enseignant,
+> clé d'API à scope pour l'agent. Passkeys reportées. Sections 3, 9, 17 et 22
+> révisées.
+>
 > v0.3 — administration par agent via une façade MCP montée dans le backend.
 > Sections 1, 5, 9, 17, 19, 22 et 23 révisées.
 >
@@ -114,6 +118,25 @@ Il peut :
 
 L'enseignant est le seul à connaître la correspondance entre un jeton et un
 élève. Cette correspondance ne réside jamais sur le serveur.
+
+### Authentification de l'enseignant
+
+L'instance sert **un seul enseignant**. Il s'authentifie par mot de passe
+(Argon2id), fixé à l'installation : il n'existe ni inscription, ni
+réinitialisation en libre-service, ni courriel de récupération — ce qui
+supposerait précisément le genre de donnée que l'application refuse de détenir.
+Un mot de passe oublié se change en régénérant une empreinte côté serveur.
+
+La session est **opaque et côté serveur**, portée par un cookie `HttpOnly`,
+`Secure`, `SameSite=Strict`. La base ne stocke qu'une empreinte du jeton de
+session : une lecture de la base ne doit pas suffire à usurper une session.
+
+Les tentatives de connexion sont limitées par adresse IP, et non globalement :
+un tiers ne doit pas pouvoir verrouiller l'enseignant hors de son propre outil.
+
+Les **passkeys** (WebAuthn) remplaceront ce mécanisme dans une version
+ultérieure. L'enjeu étant limité — un seul compte, aucune donnée nominative
+derrière — le mot de passe est un point de départ acceptable, pas une cible.
 
 ## Élève (participant)
 
@@ -501,6 +524,30 @@ Cette règle se traduit par un **scope `agent`** porté par le jeton d'API et
 vérifié par le middleware. Aucun outil MCP ne touche aux participants, aux
 jetons ni à la purge.
 
+## Authentification de l'agent
+
+L'agent s'authentifie par **clé d'API**, et non par mot de passe :
+
+```text
+Authorization: Bearer qcmw_<64 caractères hexadécimaux>
+```
+
+Ce choix n'est pas cosmétique :
+
+- un agent ne se connecte pas interactivement, une session n'a pas de sens ;
+- une clé se révoque individuellement, sans changer le mot de passe de
+  l'enseignant ni déconnecter ses autres outils ;
+- elle porte le scope, si bien que le partage des pouvoirs est appliqué par le
+  credential lui-même et non par la discipline des handlers ;
+- n'étant jamais tapée par un humain, elle a une entropie pleine — d'où un
+  stockage en SHA-256 plutôt qu'en Argon2id, dont le coût ne sert qu'à
+  compenser la faiblesse d'un secret choisi par une personne.
+
+Une clé est créée en ligne de commande, affichée une seule fois, et porte un
+libellé permettant de savoir quoi révoquer. Elle se place dans la configuration
+du client MCP, **jamais dans une conversation** : un secret collé dans un prompt
+part chez un fournisseur de modèle et se retrouve dans des journaux.
+
 ## Limites
 
 L'agent n'accède à aucune donnée nominative, pour une raison structurelle : tout
@@ -779,6 +826,10 @@ Les principales règles sont :
 - journalisation des opérations sensibles ;
 - sauvegarde de PostgreSQL ;
 - façade MCP soumise aux mêmes autorisations que l'API REST ;
+- secrets d'authentification stockés sous forme d'empreinte, jamais en clair ;
+- sessions opaques côté serveur, cookie `HttpOnly` / `Secure` / `SameSite` ;
+- limitation des tentatives de connexion par adresse IP ;
+- clés d'API révocables individuellement et porteuses d'un scope ;
 - scope restreint pour les jetons d'agent, excluant participants et purge ;
 - transitions rendant un contenu visible aux élèves réservées à l'humain ;
 - aucun champ nominatif en base, y compris optionnel ou libre ;
@@ -1027,7 +1078,10 @@ multitude de tables relationnelles.
 L'API pourrait initialement proposer :
 
 ```text
-POST   /api/auth/login                      enseignant
+POST   /api/auth/login                      enseignant : mot de passe -> session
+POST   /api/auth/logout                     ferme la session
+GET    /api/auth/me                         valide la session enseignant
+GET    /api/auth/agent                      valide une clé d'API, rend son scope
 POST   /api/auth/token                      participant : jeton + secret
 
 GET    /api/groups
