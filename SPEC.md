@@ -1,4 +1,7 @@
-# Plateforme QCM — Spécification fonctionnelle v0.1
+# Plateforme QCM — Spécification fonctionnelle v0.2
+
+> v0.2 — passage au modèle par jetons : le serveur ne détient plus aucune donnée
+> nominative. Sections 3, 4, 11, 15, 16, 18, 21, 22 et 23 révisées.
 
 ## 1. Vision du produit
 
@@ -61,11 +64,11 @@ La création d'une évaluation génère un **code d'accès court**.
 
 ### Tentative
 
-Une **tentative** représente le passage d'une évaluation par un élève.
+Une **tentative** représente le passage d'une évaluation par un participant.
 
 Elle contient :
 
-- l'élève ;
+- le participant ;
 - l'évaluation ;
 - l'heure de début ;
 - l'heure de remise ;
@@ -89,7 +92,9 @@ L'enseignant dispose d'un compte authentifié.
 Il peut :
 
 - créer et gérer ses groupes ;
-- ajouter ou importer des élèves ;
+- générer des jetons de participation pour un groupe ;
+- produire localement les billets à distribuer ;
+- réinitialiser le secret d'un jeton ou le désactiver ;
 - créer/importer des sujets ;
 - modifier les sujets ;
 - consulter leur historique ;
@@ -99,17 +104,22 @@ Il peut :
 - consulter les résultats ;
 - exporter les résultats ;
 - éventuellement modifier un barème après l'évaluation ;
-- invalider une question problématique et recalculer les résultats.
+- invalider une question problématique et recalculer les résultats ;
+- purger un groupe ou une évaluation.
 
-## Élève
+L'enseignant est le seul à connaître la correspondance entre un jeton et un
+élève. Cette correspondance ne réside jamais sur le serveur.
 
-L'élève dispose d'une identité connue à l'avance par le système.
+## Élève (participant)
 
-Aucune adresse électronique ne doit être nécessaire.
+Le serveur ne connaît pas d'élève. Il connaît un **participant**, c'est-à-dire
+un jeton rattaché à un groupe.
 
-Il peut :
+Aucun nom, prénom, adresse électronique ni compte tiers n'est nécessaire.
 
-- s'authentifier ;
+Le participant peut :
+
+- s'authentifier avec son jeton et son secret ;
 - saisir un code d'évaluation ;
 - accéder à une évaluation à laquelle son groupe est autorisé ;
 - répondre aux questions ;
@@ -117,41 +127,79 @@ Il peut :
 - remettre définitivement sa copie ;
 - consulter son résultat selon les règles définies par l'enseignant.
 
-Un élève ne peut accéder ni aux copies ni aux résultats des autres élèves.
+Un participant ne peut accéder ni aux copies ni aux résultats des autres.
 
 ---
 
-# 4. Gestion des élèves
+# 4. Gestion des participants
 
 L'application gère des groupes tels que :
 
 `1SIO`, `2SIO-SLAM`, `2SIO-SISR`, `1NSI`, etc.
 
-Un élève possède au minimum :
+Un groupe n'est qu'une étiquette et un effectif. Il ne contient aucune liste
+nominative.
+
+Un participant possède exactement :
 
 ```text
 id
-nom
-prenom
-identifiant_connexion
-secret_authentification
+jeton
+secret_hash
+group_id
 actif
+expire_le
 ```
 
-L'identifiant interne ne doit pas être construit à partir du nom et du prénom.
+Il n'existe **aucun** champ nom, prénom, adresse ou date de naissance, et aucun
+moyen d'en ajouter un. Le jeton n'est dérivé d'aucune donnée personnelle : il
+est tiré aléatoirement.
 
-Pour éviter l'utilisation d'adresses électroniques ou de comptes tiers, l'application peut générer un identifiant et un secret initial pour chaque élève.
+## Création des jetons
+
+L'enseignant indique un groupe et un effectif. Le serveur tire N jetons et N
+secrets initiaux, et ne retourne les secrets en clair qu'une seule fois.
+
+## Production des billets
+
+La jointure entre les jetons et les élèves réels est réalisée **dans le
+navigateur de l'enseignant** :
+
+```text
+liste nominative locale (CSV)   jetons renvoyés par le serveur
+             │                              │
+             └──────────────┬───────────────┘
+                            │ jointure en mémoire, côté client
+                            ▼
+                  billets imprimables
+             (nom, prénom, jeton, secret)
+```
+
+Le fichier nominatif n'est jamais transmis au serveur. Aucun point d'entrée
+d'API n'accepte de liste d'élèves.
+
+L'enseignant conserve sur son poste la table de correspondance
+`jeton → nom, prénom`. Elle relève de sa responsabilité, et sa perte rend les
+résultats définitivement non attribuables. Sa sauvegarde n'est pas optionnelle.
+
+## Cycle de vie
+
+Les jetons sont **stables sur l'année scolaire** : un même billet sert à toutes
+les évaluations du groupe.
 
 L'enseignant doit pouvoir :
 
-- réinitialiser ce secret ;
-- désactiver un élève ;
-- transférer un élève vers un autre groupe ;
-- importer une liste depuis CSV ;
-- exporter la liste ;
-- supprimer ou anonymiser les données d'un ancien élève.
+- réinitialiser le secret d'un jeton ;
+- désactiver un jeton ;
+- transférer un jeton vers un autre groupe ;
+- purger un groupe en fin d'année.
 
-Une évolution ultérieure pourra permettre une authentification OIDC, LDAP ou via l'ENT.
+La purge d'un groupe détruit les jetons et les tentatives associées. C'est une
+opération prévue et tracée, et non un nettoyage manuel en base.
+
+Une évolution ultérieure pourra permettre une authentification OIDC, LDAP ou
+via l'ENT. Elle réintroduirait des identités sur le serveur et devrait donc
+faire l'objet d'une nouvelle analyse au regard de la section 18.
 
 ---
 
@@ -449,18 +497,30 @@ Lorsqu'une évaluation est publiée, un code court est généré, par exemple :
 K7MP4Q
 ```
 
-Les caractères ambigus (`0/O`, `1/I`, etc.) peuvent être exclus.
+Les caractères ambigus (`0/O`, `1/I`, etc.) sont exclus, aussi bien des codes
+d'évaluation que des jetons.
 
-Le code :
+Deux objets distincts coexistent :
+
+```text
+jeton + secret   →  authentifie un participant      (annuel, personnel)
+code évaluation  →  désigne une évaluation ouverte  (éphémère, collectif)
+```
+
+Le code d'évaluation :
 
 - n'est pas un moyen d'authentification ;
 - ne révèle aucune information ;
 - doit être suffisamment aléatoire pour empêcher l'énumération.
 
-Le workflow élève devient alors :
+Il joue en revanche le rôle de second facteur contextuel : connaître un jeton
+ne suffit pas à composer, encore faut-il que l'évaluation soit ouverte et que
+le groupe du jeton y soit autorisé.
+
+Le workflow participant devient :
 
 ```text
-connexion
+connexion par jeton + secret
    ↓
 code K7MP4Q
    ↓
@@ -502,7 +562,9 @@ Le serveur reste la référence pour :
 - l'heure de remise ;
 - le calcul du score.
 
-Un stockage local du navigateur peut conserver temporairement les réponses en cas de coupure réseau.
+Un stockage local du navigateur peut conserver temporairement les réponses en
+cas de coupure réseau. Il ne doit contenir que des réponses et le jeton en
+cours, jamais de donnée nominative.
 
 ---
 
@@ -562,14 +624,20 @@ Le résultat est donc reproductible et auditable.
 
 # 15. Tableau de résultats
 
-L'enseignant dispose d'une vue synthétique :
+L'enseignant dispose d'une vue synthétique. Le serveur ne connaissant que des
+jetons, c'est ce qu'il affiche :
 
-| Élève | État | Score | % | Note | Durée |
+| Participant | État | Score | % | Note | Durée |
 |---|---|---:|---:|---:|---:|
-| Alice Martin | remis | 17/20 | 85 % | 17 | 12:14 |
-| Bob Dupont | remis | 13/20 | 65 % | 13 | 18:42 |
-| Charlie Durand | en cours | — | — | — | — |
-| David Bernard | absent | — | — | — | — |
+| 7K4M-P2QF | remis | 17/20 | 85 % | 17 | 12:14 |
+| B9XT-RM3D | remis | 13/20 | 65 % | 13 | 18:42 |
+| Q3FP-K8TW | en cours | — | — | — | — |
+| M2RD-X7BN | absent | — | — | — | — |
+
+Une commande « Charger ma liste » permet d'ouvrir la table de correspondance
+locale. La jointure s'effectue en mémoire dans le navigateur, le tableau
+affiche alors les noms, et cet affichage disparaît au rechargement de la page.
+Rien n'est transmis au serveur.
 
 Une vue par question permet également d'obtenir :
 
@@ -580,7 +648,9 @@ Q3 : 37 %
 Q4 : 74 %
 ```
 
-Cette information est particulièrement utile en évaluation formative puisqu'elle permet d'identifier les notions insuffisamment maîtrisées par le groupe.
+Cette information est particulièrement utile en évaluation formative puisqu'elle
+permet d'identifier les notions insuffisamment maîtrisées par le groupe. Elle
+est de surcroît entièrement agrégée, donc dépourvue de lien avec un participant.
 
 Les résultats peuvent être exportés au minimum en :
 
@@ -589,13 +659,16 @@ CSV
 JSON
 ```
 
+L'export produit par le serveur est toujours pseudonymisé. Un export nominatif
+peut être généré côté client, après jointure locale, en vue d'un report dans le
+logiciel de notes de l'établissement.
+
 ---
 
 # 16. Aménagements individuels
 
-Une évaluation peut contenir des paramètres spécifiques à certains élèves.
-
-Par exemple :
+Une évaluation peut contenir des paramètres spécifiques à certains
+participants, désignés par leur jeton :
 
 ```text
 temps supplémentaire
@@ -604,7 +677,12 @@ absence justifiée
 nouvelle tentative autorisée
 ```
 
-Cette possibilité doit être prévue dans le modèle même si l'interface complète peut arriver ultérieurement.
+L'enseignant sait à quel élève correspond le jeton ; le serveur, non. Un
+aménagement ne comporte donc jamais de motif nominatif, ni aucune mention
+relevant de la santé ou d'un diagnostic.
+
+Cette possibilité doit être prévue dans le modèle même si l'interface complète
+peut arriver ultérieurement.
 
 ---
 
@@ -624,7 +702,9 @@ Les principales règles sont :
 - contrôles empêchant les accès horizontaux entre élèves ;
 - contrôle strict de l'appartenance aux groupes ;
 - journalisation des opérations sensibles ;
-- sauvegarde de PostgreSQL.
+- sauvegarde de PostgreSQL ;
+- aucun champ nominatif en base, y compris optionnel ou libre ;
+- purge effective des jetons et tentatives à l'échéance.
 
 Le système ne cherche pas à mettre en place une surveillance intrusive de type « proctoring ».
 
@@ -644,32 +724,62 @@ questions tirées éventuellement d'un pool
 
 # 18. Données personnelles
 
-Les données minimales concernant un élève sont :
+L'application est conçue pour qu'aucune donnée nominative ne soit hébergée.
+
+Le serveur détient, pour un participant :
+
+```text
+jeton
+groupe
+résultats aux évaluations
+```
+
+Il ne détient pas, et ne doit jamais pouvoir détenir :
 
 ```text
 nom
 prénom
-groupe
-identifiant
-résultats aux évaluations
-```
-
-Aucune donnée telle que :
-
-```text
-adresse
+adresse électronique
+adresse postale
 téléphone
-email personnel
 date de naissance
 ```
 
-n'est nécessaire.
+La correspondance entre un jeton et un élève réside uniquement sur le poste de
+l'enseignant, dans le même périmètre que son cahier de notes.
 
-L'application doit permettre de définir une politique de conservation et de supprimer ou anonymiser les données des élèves.
+## Portée exacte de cette conception
 
-Elle ne doit embarquer aucun tracker publicitaire ou outil d'analyse tiers par défaut.
+Les jetons demeurent des données à caractère personnel au sens du considérant 26
+du RGPD : ils sont pseudonymisés, non anonymisés, puisque l'enseignant détient
+la clé de réidentification. Le traitement reste donc soumis au RGPD et doit
+figurer au registre du responsable de traitement — lequel est le chef
+d'établissement, et non l'enseignant.
 
-La question de la base légale RGPD dépend du responsable du traitement et du contexte d'utilisation ; elle ne doit pas être figée dans les spécifications techniques de l'application.
+Ce que cette conception apporte réellement :
+
+- une compromission du serveur n'expose aucune identité ;
+- l'hébergeur ne traite aucune donnée nominative ;
+- la minimisation (art. 5.1.c) devient structurelle et non déclarative ;
+- le droit à l'effacement (art. 17) se réduit à la purge d'un jeton ;
+- la ligne à porter au registre décrit un traitement minimal.
+
+## Conservation
+
+Les jetons sont valables une année scolaire. Une purge de fin d'année détruit
+jetons et tentatives.
+
+Les évaluations passées peuvent être conservées sous forme agrégée
+(statistiques par question), dépourvue de tout lien avec un participant.
+
+L'application n'embarque aucun tracker publicitaire ni outil d'analyse tiers, et
+n'émet aucune requête vers un domaine tiers depuis le navigateur.
+
+## Limite d'usage
+
+Cette analyse vaut pour une instance exploitée par un enseignant pour ses
+propres classes. Ouvrir l'instance à d'autres enseignants modifie la
+qualification des responsabilités et impose de la reprendre.
 
 ---
 
@@ -774,14 +884,13 @@ Workspace
 User
 
 Group
-Student
-GroupMembership
+Participant
 
 Subject
 SubjectVersion
 
 Assessment
-AssessmentStudentOverride
+AssessmentParticipantOverride
 
 Attempt
 AttemptAnswer
@@ -790,6 +899,10 @@ GradingRevision
 
 AuditEvent
 ```
+
+Il n'existe pas d'entité `Student`. `Participant` ne porte aucun attribut
+identifiant, et un participant appartient à un seul groupe à la fois — un
+transfert est une mise à jour, ce qui rend inutile une table d'adhésion.
 
 La relation principale devient :
 
@@ -804,13 +917,15 @@ Subject
                    │
                    └── Attempt
                            │
-                           ├── Student
+                           ├── Participant
                            └── AttemptAnswer
 ```
 
-Les questions du sujet peuvent initialement être conservées sous forme de document JSONB dans `SubjectVersion`.
+Les questions du sujet peuvent initialement être conservées sous forme de
+document JSONB dans `SubjectVersion`.
 
-Cela évite de transformer immédiatement chaque détail d'une question en une multitude de tables relationnelles.
+Cela évite de transformer immédiatement chaque détail d'une question en une
+multitude de tables relationnelles.
 
 ---
 
@@ -819,14 +934,18 @@ Cela évite de transformer immédiatement chaque détail d'une question en une m
 L'API pourrait initialement proposer :
 
 ```text
-POST   /api/auth/login
+POST   /api/auth/login                      enseignant
+POST   /api/auth/token                      participant : jeton + secret
 
 GET    /api/groups
 POST   /api/groups
+POST   /api/groups/{id}/participants        génère N jetons
+GET    /api/groups/{id}/participants        jetons et états, jamais de noms
+POST   /api/groups/{id}/purge
 
-GET    /api/students
-POST   /api/students
-POST   /api/students/import
+POST   /api/participants/{id}/reset-secret
+POST   /api/participants/{id}/deactivate
+POST   /api/participants/{id}/move
 
 GET    /api/subjects
 POST   /api/subjects
@@ -848,7 +967,15 @@ GET    /api/assessments/{id}/results
 GET    /api/attempts/{id}/result
 ```
 
-OpenAPI doit être généré directement depuis le backend Rust afin que le client TypeScript puisse disposer de types générés.
+Les secrets initiaux ne sont retournés en clair que par la réponse à
+`POST /api/groups/{id}/participants`, et ne sont plus jamais relisibles.
+
+Aucun point d'entrée n'accepte de liste nominative. Il n'existe pas de
+`POST /api/students/import`, et une telle route ne doit pas être ajoutée : la
+production des billets est une opération strictement navigateur.
+
+OpenAPI doit être généré directement depuis le backend Rust afin que le client
+TypeScript puisse disposer de types générés.
 
 ---
 
@@ -859,43 +986,51 @@ Le MVP est volontairement limité.
 Il doit permettre de réaliser l'intégralité du scénario suivant :
 
 ```text
-1. L'enseignant crée un groupe.
+ 1. L'enseignant crée un groupe.
 
-2. Il importe ses élèves depuis un CSV.
+ 2. Il demande N jetons pour ce groupe.
 
-3. Un agent IA génère un qcm/v1 YAML.
+ 3. Son navigateur joint ces jetons à sa liste locale
+    et produit les billets imprimables.
 
-4. L'enseignant importe ce fichier.
+ 4. Il distribue les billets en classe.
 
-5. L'application valide le document.
+ 5. Un agent IA génère un qcm/v1 YAML.
 
-6. L'enseignant prévisualise et valide le sujet.
+ 6. L'enseignant importe ce fichier.
 
-7. Il crée une évaluation pour son groupe.
+ 7. L'application valide le document.
 
-8. L'application lui fournit un code.
+ 8. L'enseignant prévisualise et valide le sujet.
 
-9. Les élèves se connectent.
+ 9. Il crée une évaluation pour son groupe.
 
-10. Ils entrent le code.
+10. L'application lui fournit un code.
 
-11. Ils répondent individuellement au QCM.
+11. Les élèves se connectent avec leur jeton.
 
-12. Les réponses sont sauvegardées automatiquement.
+12. Ils entrent le code.
 
-13. Ils remettent leur copie.
+13. Ils répondent individuellement au QCM.
 
-14. Le backend calcule le résultat.
+14. Les réponses sont sauvegardées automatiquement.
 
-15. L'élève obtient le retour prévu par l'enseignant.
+15. Ils remettent leur copie.
 
-16. L'enseignant consulte les résultats individuels
+16. Le backend calcule le résultat.
+
+17. L'élève obtient le retour prévu par l'enseignant.
+
+18. L'enseignant consulte les résultats par jeton
     et les statistiques par question.
 
-17. L'enseignant exporte les résultats en CSV.
+19. Il charge sa liste locale pour afficher les noms.
+
+20. Il exporte les résultats en CSV.
 ```
 
-Tout ce qui n'est pas nécessaire à ce scénario doit être considéré avec prudence avant d'entrer dans le MVP.
+Tout ce qui n'est pas nécessaire à ce scénario doit être considéré avec prudence
+avant d'entrer dans le MVP.
 
 ---
 
