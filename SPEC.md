@@ -1,5 +1,8 @@
-# Plateforme QCM — Spécification fonctionnelle v0.2
+# Plateforme QCM — Spécification fonctionnelle v0.3
 
+> v0.3 — administration par agent via une façade MCP montée dans le backend.
+> Sections 1, 5, 9, 17, 19, 22 et 23 révisées.
+>
 > v0.2 — passage au modèle par jetons : le serveur ne détient plus aucune donnée
 > nominative. Sections 3, 4, 11, 15, 16, 18, 21, 22 et 23 révisées.
 
@@ -26,9 +29,11 @@ L'objectif principal est de pouvoir passer très rapidement de :
 
 à :
 
-> « Voici un fichier de QCM généré par un agent IA que je peux relire, importer et publier. »
+> « Voici un QCM déposé par un agent IA que je n'ai plus qu'à relire et publier. »
 
-L'IA ne fait pas partie du moteur d'évaluation lui-même. Elle est un outil de **production du sujet**, en amont.
+L'IA ne fait pas partie du moteur d'évaluation lui-même. Elle est un outil de
+**production du sujet**, en amont, et un moyen d'**administrer l'application**
+sans en coder toute l'interface (voir section 9).
 
 ---
 
@@ -213,9 +218,16 @@ VALIDATED
 ARCHIVED
 ```
 
-L'import d'un fichier produit systématiquement un brouillon.
+Tout dépôt de sujet produit systématiquement un brouillon, quelle que soit son
+origine.
 
-L'enseignant doit pouvoir visualiser le questionnaire exactement comme le verra l'élève avant de le valider.
+L'enseignant doit pouvoir visualiser le questionnaire exactement comme le verra
+l'élève avant de le valider.
+
+La transition `DRAFT → VALIDATED` est **réservée à l'enseignant**, dans son
+navigateur. Elle n'est accessible ni à un agent, ni à aucun automate : c'est la
+porte de relecture humaine, et elle constitue à ce titre une garantie de
+sécurité autant qu'une garantie pédagogique.
 
 Lorsqu'un sujet validé est modifié, une **nouvelle version** est créée.
 
@@ -398,7 +410,11 @@ sans modifier le cœur de l'application.
 
 ---
 
-# 9. Génération par IA
+# 9. Génération et administration par agent
+
+Les sujets étant le plus souvent produits par un agent IA, l'application lui
+donne un accès direct au backend plutôt que de reproduire cet accès dans une
+interface d'administration.
 
 Le workflow privilégié est :
 
@@ -409,20 +425,21 @@ Cours / objectifs pédagogiques
            ↓
        YAML qcm/v1
            ↓
- validation syntaxique
+ validation syntaxique      ─┐
+           ↓                 │  boucle autonome de l'agent
+ validation fonctionnelle   ─┘
            ↓
- validation fonctionnelle
+ dépôt en brouillon
            ↓
- relecture enseignant
+ relecture enseignant        ← navigateur, humain
            ↓
-       publication
+       validation
 ```
 
-L'application doit fournir un JSON Schema ou un schéma équivalent permettant à un agent de vérifier son résultat.
+L'application fournit un JSON Schema permettant à un agent de vérifier son
+résultat avant tout envoi.
 
-Des validations métier doivent également être effectuées.
-
-Par exemple :
+Des validations métier sont également effectuées côté serveur :
 
 ```text
 single_choice → exactement une réponse correcte
@@ -432,9 +449,67 @@ ID de question unique
 ID de réponse unique dans la question
 ```
 
-L'IA ne participe pas à la correction pendant l'évaluation.
+## Façade MCP
 
-Les données nominatives des élèves n'ont donc aucune raison d'être envoyées à un LLM.
+Le backend expose une façade **MCP** (Model Context Protocol) en plus de son API
+REST. Il ne s'agit pas d'un second service : la façade est montée dans la même
+application, derrière le même middleware d'authentification et les mêmes règles
+d'autorisation. Elle n'ouvre aucun chemin d'accès qui n'existe pas déjà.
+
+Outils exposés :
+
+```text
+qcm_validate_subject(yaml)     dry-run : schéma + règles métier, aucune écriture
+qcm_publish_draft(yaml)        crée un DRAFT, retourne l'URL de relecture
+qcm_list_subjects
+qcm_get_subject(id)
+qcm_create_assessment(...)     exige une version validée, retourne le code
+qcm_list_assessments
+qcm_get_results(id)            pseudonymisé
+qcm_question_stats(id)         agrégé
+```
+
+Ressource exposée :
+
+```text
+qcm://schema/v1                le JSON Schema du format natif
+```
+
+Le couple `qcm://schema/v1` + `qcm_validate_subject` ferme la boucle de
+génération : l'agent produit, valide, corrige et redépose sans intervention.
+`qcm_publish_draft` retourne l'URL de relecture, ce qui donne la jonction
+naturelle entre le travail de l'agent et celui de l'enseignant.
+
+## Règle de partage : l'agent écrit, l'humain publie
+
+Toute transition qui rend quelque chose visible aux élèves, ou qui détruit des
+données, relève exclusivement du navigateur.
+
+| Agent (MCP) | Enseignant (navigateur) |
+|---|---|
+| valider un YAML | `DRAFT → VALIDATED` |
+| créer un sujet en `DRAFT` | ouvrir / fermer une évaluation |
+| lire sujets et versions | générer des jetons, réinitialiser un secret |
+| créer une évaluation | purger un groupe |
+| lire résultats pseudonymisés | jointure nominative, billets, export nominatif |
+
+La création d'une évaluation est confiée à l'agent : elle ne peut référencer
+qu'une version déjà validée par l'enseignant, et l'évaluation reste fermée
+jusqu'à son ouverture manuelle. Le risque est donc borné.
+
+Cette règle se traduit par un **scope `agent`** porté par le jeton d'API et
+vérifié par le middleware. Aucun outil MCP ne touche aux participants, aux
+jetons ni à la purge.
+
+## Limites
+
+L'agent n'accède à aucune donnée nominative, pour une raison structurelle : tout
+ce qui transite par un outil MCP entre dans le contexte d'un LLM. La table de
+correspondance `jeton → nom, prénom` et la production des billets restent donc
+des opérations strictement navigateur (voir section 18).
+
+L'IA ne participe pas non plus à la correction pendant l'évaluation, ni à
+l'analyse des réponses.
 
 ---
 
@@ -703,8 +778,17 @@ Les principales règles sont :
 - contrôle strict de l'appartenance aux groupes ;
 - journalisation des opérations sensibles ;
 - sauvegarde de PostgreSQL ;
+- façade MCP soumise aux mêmes autorisations que l'API REST ;
+- scope restreint pour les jetons d'agent, excluant participants et purge ;
+- transitions rendant un contenu visible aux élèves réservées à l'humain ;
 - aucun champ nominatif en base, y compris optionnel ou libre ;
 - purge effective des jetons et tentatives à l'échéance.
+
+L'exposition d'une façade MCP introduit un vecteur propre : un agent peut lire un
+document préparatoire contenant des instructions hostiles. La protection ne
+repose pas sur la détection de ces instructions, mais sur le partage des
+pouvoirs décrit en section 9 : un agent compromis ne peut, au pire, que déposer
+un brouillon indésirable.
 
 Le système ne cherche pas à mettre en place une surveillance intrusive de type « proctoring ».
 
@@ -786,28 +870,36 @@ qualification des responsabilités et impose de la reprendre.
 # 19. Architecture technique proposée
 
 ```text
-┌─────────────────────────┐
-│       Navigateur        │
-│                         │
-│ Next.js / TypeScript    │
-│ enseignant + élève      │
-└────────────┬────────────┘
-             │ HTTPS / JSON
-             │
-┌────────────▼────────────┐
-│        API Rust         │
-│                         │
-│ Axum                    │
-│ Tokio                   │
-│ Serde                   │
-│ SQLx                    │
-│ OpenAPI                 │
-└────────────┬────────────┘
-             │
-┌────────────▼────────────┐
-│      PostgreSQL         │
-└─────────────────────────┘
+┌─────────────────────────┐     ┌─────────────────────────┐
+│       Navigateur        │     │        Agent IA         │
+│                         │     │                         │
+│ Next.js / TypeScript    │     │ client MCP              │
+│ relecture, billets,     │     │ rédaction des sujets    │
+│ ouverture, résultats    │     │                         │
+└────────────┬────────────┘     └────────────┬────────────┘
+             │ HTTPS / JSON                  │ HTTPS / MCP
+             │ /api/*                        │ /mcp
+             └───────────────┬───────────────┘
+                             │
+             ┌───────────────▼───────────────┐
+             │           API Rust            │
+             │                               │
+             │ Axum · Tokio · Serde · SQLx   │
+             │ utoipa (OpenAPI) · rmcp (MCP) │
+             │                               │
+             │ auth et autorisations         │
+             │ communes aux deux façades     │
+             └───────────────┬───────────────┘
+                             │
+             ┌───────────────▼───────────────┐
+             │          PostgreSQL           │
+             └───────────────────────────────┘
 ```
+
+Les deux façades partagent les mêmes handlers métier. `rmcp` expose son
+transport HTTP sous forme de service Tower, monté dans le routeur Axum ; les
+handlers d'outils accèdent aux en-têtes de la requête, donc au même contexte
+d'authentification que l'API REST.
 
 Le tout est déployable avec Docker Compose.
 
@@ -818,14 +910,15 @@ Nginx
   ↓
 frontend
 
-/api/*
+/api/*  et  /mcp
   ↓
 API Rust
 
 PostgreSQL
 ```
 
-Un stockage objet compatible S3 pourra être ajouté ultérieurement pour les images intégrées aux questions.
+Un stockage objet compatible S3 pourra être ajouté ultérieurement pour les
+images intégrées aux questions.
 
 ---
 
@@ -977,6 +1070,12 @@ production des billets est une opération strictement navigateur.
 OpenAPI doit être généré directement depuis le backend Rust afin que le client
 TypeScript puisse disposer de types générés.
 
+La façade MCP décrite en section 9 est montée sur `/mcp` dans la même
+application et s'appuie sur les mêmes handlers. Les outils qu'elle expose sont
+délibérément taillés pour la tâche plutôt que calqués un à un sur les routes
+REST : une transposition mécanique de l'OpenAPI produirait une surface
+inutilisable par un agent.
+
 ---
 
 # 23. MVP
@@ -995,17 +1094,20 @@ Il doit permettre de réaliser l'intégralité du scénario suivant :
 
  4. Il distribue les billets en classe.
 
- 5. Un agent IA génère un qcm/v1 YAML.
+ 5. Un agent IA rédige un qcm/v1 YAML à partir du cours.
 
- 6. L'enseignant importe ce fichier.
+ 6. L'agent le valide contre le schéma, corrige, revalide.
 
- 7. L'application valide le document.
+ 7. L'agent dépose le sujet en brouillon via MCP
+    et retourne l'URL de relecture.
 
- 8. L'enseignant prévisualise et valide le sujet.
+ 8. L'enseignant prévisualise le sujet dans son navigateur
+    et le valide.
 
- 9. Il crée une évaluation pour son groupe.
+ 9. L'agent crée une évaluation sur cette version validée
+    et retourne le code.
 
-10. L'application lui fournit un code.
+10. L'enseignant ouvre l'évaluation.
 
 11. Les élèves se connectent avec leur jeton.
 
@@ -1029,8 +1131,19 @@ Il doit permettre de réaliser l'intégralité du scénario suivant :
 20. Il exporte les résultats en CSV.
 ```
 
-Tout ce qui n'est pas nécessaire à ce scénario doit être considéré avec prudence
-avant d'entrer dans le MVP.
+Côté interface web, le MVP se réduit donc au parcours élève complet et à quatre
+écrans enseignant :
+
+```text
+prévisualisation et validation d'un sujet
+génération de jetons et production des billets
+ouverture / fermeture d'une évaluation
+résultats, jointure locale et export
+```
+
+Tout le reste de l'administration passe par la façade MCP. Tout ce qui n'est pas
+nécessaire à ce scénario doit être considéré avec prudence avant d'entrer dans
+le MVP.
 
 ---
 

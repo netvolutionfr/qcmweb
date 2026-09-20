@@ -29,8 +29,10 @@ Toute PR qui en enfreint une est à rejeter.
    Pas de conservation « au cas où ».
 5. **Aucun tracker, aucune analytics tierce, aucune police distante.**
    Zéro requête sortante depuis le navigateur vers un domaine tiers.
-6. **Aucune donnée d'élève transmise à un LLM.** L'IA intervient uniquement en
-   amont, à la production du sujet, hors de l'application.
+6. **Aucune donnée d'élève transmise à un LLM.** Tout ce qui transite par un
+   outil MCP entre dans le contexte d'un modèle : aucun outil ne touche donc aux
+   participants, aux jetons, ni à la table de correspondance locale. L'IA rédige
+   des sujets et lit des résultats pseudonymisés, rien d'autre.
 
 **Modèle mental** : le serveur est un paquet de copies *sans nom dessus*. Il
 calcule des scores pour des jetons. Seul l'enseignant, sur son poste, sait à
@@ -69,11 +71,17 @@ d'évaluation à 6 caractères jouant le rôle de second facteur contextuel.
 
 ```
 Navigateur   Next.js (App Router) · TypeScript · types générés depuis OpenAPI
-     │ HTTPS/JSON
-   API        Rust · Axum · Tokio · Serde · SQLx · utoipa
+Agent IA     client MCP
+     │ /api/*  et  /mcp
+   API        Rust · Axum · Tokio · Serde · SQLx · utoipa · rmcp
      │
    Base       PostgreSQL (questions en JSONB dans SubjectVersion)
 ```
+
+La façade MCP (`rmcp`, `StreamableHttpService` monté comme service Tower dans le
+routeur Axum) n'est **pas un second service** : même binaire, même middleware
+d'authentification, mêmes handlers métier. Elle n'ouvre aucun chemin d'accès qui
+n'existe pas déjà en REST.
 
 Déploiement par Docker Compose. Pas de stockage objet au MVP.
 
@@ -87,7 +95,41 @@ docs/   schéma qcm/v1, notes d'architecture
 
 ---
 
-## 4. Règles d'ingénierie
+## 4. Partage agent / humain
+
+L'administration passe par la façade MCP plutôt que par des écrans. Le front
+enseignant se réduit à quatre écrans : prévisualisation et validation d'un
+sujet, génération de jetons et billets, ouverture/fermeture d'une évaluation,
+résultats avec jointure locale et export.
+
+**Règle : l'agent écrit, l'humain publie.** Toute transition qui rend quelque
+chose visible aux élèves, ou qui détruit des données, relève exclusivement du
+navigateur.
+
+| Agent (MCP) | Enseignant (navigateur) |
+|---|---|
+| valider un YAML (dry-run) | `DRAFT → VALIDATED` |
+| créer un sujet en `DRAFT` | ouvrir / fermer une évaluation |
+| lire sujets et versions | générer des jetons, réinitialiser un secret |
+| créer une évaluation (version validée requise) | purger un groupe |
+| lire résultats pseudonymisés et stats | jointure nominative, billets, export nominatif |
+
+Cette règle est appliquée par un **scope `agent`** porté par le jeton d'API et
+vérifié dans le middleware — pas par convention, pas par la description des
+outils.
+
+Elle est aussi la défense contre l'injection de prompt : un agent qui lit un
+document hostile ne peut, au pire, que déposer un brouillon indésirable. La
+porte `DRAFT → VALIDATED` humaine est la protection réelle. Ne jamais
+l'automatiser, même « pour les évaluations formatives ».
+
+Outils MCP et ressource : voir SPEC.md §9. Les outils sont taillés pour la
+tâche, pas transposés un à un depuis les routes REST — un pont OpenAPI→MCP
+générique produirait une surface inutilisable par un agent.
+
+---
+
+## 5. Règles d'ingénierie
 
 - **Le backend est l'unique source de vérité.** Heure de début, durée, heure de
   remise et calcul du score sont serveur. Le client ne fait qu'afficher.
@@ -117,9 +159,10 @@ docs/   schéma qcm/v1, notes d'architecture
 
 ---
 
-## 5. Périmètre
+## 6. Périmètre
 
-Le MVP est le scénario complet du §23 de la SPEC, adapté au modèle par jetons.
+Le MVP est le scénario complet du §23 de la SPEC (modèle par jetons,
+administration par agent).
 Avant d'ajouter quoi que ce soit, vérifier que c'est sur ce chemin.
 
 Hors périmètre : classement, gamification, badges, chat, LMS, mobile natif,
@@ -131,7 +174,7 @@ classement, texte à trous, correction manuelle, OIDC/LDAP/ENT.
 
 ---
 
-## 6. Commandes
+## 7. Commandes
 
 ```bash
 docker compose up -d          # postgres + api + web
@@ -146,7 +189,7 @@ jamais écrire à la main un type qui décrit une réponse d'API.
 
 ---
 
-## 7. Conventions
+## 8. Conventions
 
 - Interface et documentation utilisateur en **français**. Code, identifiants et
   messages de commit en **anglais**.
@@ -162,6 +205,6 @@ jamais écrire à la main un type qui décrit une réponse d'API.
 
 ---
 
-## 8. Licence
+## 9. Licence
 
 MIT. Voir [LICENSE](LICENSE).
