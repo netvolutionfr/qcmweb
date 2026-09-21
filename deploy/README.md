@@ -99,29 +99,36 @@ qu'il parle bien à **votre** serveur et pas à un intercepteur. Ce n'est pas la
 commande qu'on colle dans le secret, mais **ce qu'elle affiche** :
 
 ```bash
-ssh-keyscan -t ed25519 mon-serveur.example 2>/dev/null
+ssh-keyscan mon-serveur.example 2>/dev/null | grep -v '^#'
 ```
 
 `mon-serveur.example` est le nom (ou l'adresse) du serveur, **exactement** tel que
-vous le mettrez dans `DEPLOY_HOST`. La commande affiche une seule ligne :
+vous le mettrez dans `DEPLOY_HOST`. Le `grep` retire les lignes de commentaire,
+que `ssh-keyscan` écrit sur la sortie standard. La commande affiche une ligne par
+type de clé que le serveur propose, par exemple :
 
 ```
 mon-serveur.example ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMq3k8f9x2Qw7Hn1B0vZp…
+mon-serveur.example ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDNIhoG+yGoSDkmIfkp4ju…
 ```
 
-C'est cette ligne, **entière**, qui va dans le secret. Elle est publique : rien de
-confidentiel, mais elle doit être exacte.
+Un serveur n'en propose parfois qu'un seul (RSA, par exemple), ce qui suffit.
+Ces lignes, **entières**, vont dans le secret. Elles sont publiques : rien de
+confidentiel, mais elles doivent être exactes.
 
 `ssh-keyscan` fait confiance à qui répond. Pour être sûr de ne pas avoir pris
-l'empreinte d'un intercepteur, comparez ces deux résultats, qui doivent être
-identiques :
+l'empreinte d'un intercepteur, comparez ces deux résultats, dont les empreintes
+`SHA256:…` doivent être identiques :
 
 ```bash
 # sur votre poste
-ssh-keyscan -t ed25519 mon-serveur.example 2>/dev/null | ssh-keygen -lf -
+ssh-keyscan mon-serveur.example 2>/dev/null | grep -v '^#' | ssh-keygen -lf -
 # sur le serveur
-ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub
 ```
+
+Si elles diffèrent, **ne collez rien** : vous ne parlez pas à la machine que vous
+croyez, ou quelqu'un s'interpose.
 
 Si SSH n'écoute pas sur le port 22, ajouter `-p <port>` à `ssh-keyscan` : la ligne
 commence alors par `[mon-serveur.example]:<port>`.
