@@ -55,6 +55,26 @@ sudo mkdir /opt/qcmweb && sudo chown deploy: /opt/qcmweb
 sudo -u deploy git clone https://github.com/netvolutionfr/qcmweb.git /opt/qcmweb
 ```
 
+Le premier clonage est **forcément manuel** : `deploy.sh` fait partie du dépôt, il
+n'existe pas sur le serveur tant que le dépôt n'y est pas. Les déploiements
+suivants, eux, sont faits par le script.
+
+`git clone` refuse un dossier non vide, ce qui est le cas d'un dossier personnel
+(il contient au moins `.ssh`). Dans ce cas, initialiser le dépôt sur place :
+
+```bash
+cd /home/qcm
+git init -b main
+git remote add origin https://github.com/netvolutionfr/qcmweb.git
+git fetch --depth 1 origin main
+git reset --hard FETCH_HEAD
+ls -l deploy/deploy.sh          # doit afficher -rwxr-xr-x
+```
+
+Un sous-dossier dédié (`/home/qcm/app`, où `git clone` fonctionne directement)
+garde le dossier personnel net ; `authorized_keys` doit alors désigner
+`/home/qcm/app/deploy/deploy.sh`.
+
 Les secrets **applicatifs** vivent ici, sur le serveur, et nulle part dans
 GitHub :
 
