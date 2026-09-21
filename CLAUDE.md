@@ -308,6 +308,13 @@ Règles du front :
 - **Thème par `prefers-color-scheme`**, pas par classe : aucune dépendance,
   aucun flash avant hydratation. Une bascule manuelle exigerait `next-themes`
   et le retour au variant par classe (voir ADR-0009).
+- **Un composant qui accepte `className` le fusionne avec `cn`**, jamais par
+  concaténation. `[&_p]:my-2` suivi de `[&_p]:my-0` : le gagnant dépend de
+  l'ordre dans la feuille de style, pas de celui écrit. Cette concaténation
+  gonflait les lignes de propositions et décalait leurs cases.
+- **La vue enseignant et la vue élève d'une question partagent
+  `question-frame.tsx`** (cadre, énoncé, marque de sélection). La relecture doit
+  montrer exactement ce que verra la classe ; deux copies finiraient par diverger.
 - **Mobile d'abord.** Le parcours élève se fera en salle, sur téléphone. Sa
   coque ne comporte aucune navigation : un élève en épreuve n'a qu'une chose à
   faire, et chaque élément superflu est une occasion de se perdre.

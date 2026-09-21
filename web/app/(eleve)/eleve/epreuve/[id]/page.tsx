@@ -156,7 +156,7 @@ export default function Epreuve({ params }: { params: Promise<{ id: string }> })
         <p className="text-sm text-muted-foreground">{sitting.exam.description}</p>
       )}
 
-      <div className="space-y-3">
+      <div className="space-y-6 sm:space-y-8">
         {sitting.exam.questions.map((question, index) => (
           <QuestionCard
             key={question.id}

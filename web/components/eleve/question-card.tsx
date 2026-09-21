@@ -1,8 +1,7 @@
 "use client";
 
-import { Check } from "lucide-react";
 import { Markdown } from "@/components/markdown";
-import { Badge } from "@/components/ui/badge";
+import { ChoiceMark, QuestionFrame } from "@/components/question-frame";
 import { cn } from "@/lib/utils";
 import type { ExamQuestion } from "@/lib/api";
 
@@ -43,23 +42,14 @@ export function QuestionCard({
   }
 
   return (
-    <section className="rounded-lg border p-4">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-xs text-muted-foreground">
-          Question {index + 1} sur {total}
-        </p>
-        <Badge variant="secondary" className="shrink-0">
-          {question.points} pt{question.points > 1 ? "s" : ""}
-        </Badge>
-      </div>
-
-      <Markdown className="mt-2">{question.prompt}</Markdown>
-
-      {question.multiple && (
-        <p className="mt-1 text-xs text-muted-foreground">Plusieurs réponses possibles.</p>
-      )}
-
-      <ul className="mt-3 space-y-2">
+    <QuestionFrame
+      index={index}
+      total={total}
+      points={question.points}
+      prompt={question.prompt}
+      hint={question.multiple ? "Plusieurs réponses possibles." : undefined}
+    >
+      <ul className="space-y-2.5">
         {question.choices.map((choice) => {
           const checked = selected.includes(choice.id);
           return (
@@ -70,27 +60,18 @@ export function QuestionCard({
                 disabled={disabled}
                 aria-pressed={checked}
                 className={cn(
-                  "flex w-full items-start gap-3 rounded-md border px-3 py-3 text-left transition-colors",
+                  "flex w-full items-center gap-3 rounded-md border px-3 py-3 text-left transition-colors",
                   checked ? "border-foreground/40 bg-accent" : "hover:bg-accent/50",
                   disabled && "opacity-60",
                 )}
               >
-                <span
-                  aria-hidden
-                  className={cn(
-                    "mt-0.5 flex size-5 shrink-0 items-center justify-center border",
-                    question.multiple ? "rounded-[4px]" : "rounded-full",
-                    checked ? "border-foreground bg-foreground text-background" : "bg-background",
-                  )}
-                >
-                  {checked && <Check className="size-3.5" strokeWidth={3} />}
-                </span>
-                <Markdown className="min-w-0 flex-1 [&_p]:my-0">{choice.text}</Markdown>
+                <ChoiceMark multiple={question.multiple} state={checked ? "on" : "off"} />
+                <Markdown className="min-w-0 flex-1">{choice.text}</Markdown>
               </button>
             </li>
           );
         })}
       </ul>
-    </section>
+    </QuestionFrame>
   );
 }

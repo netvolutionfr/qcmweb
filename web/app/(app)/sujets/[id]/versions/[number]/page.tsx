@@ -119,9 +119,15 @@ export default function Preview({
           : "Bonnes réponses, explications et barème, pour vérifier la correction."}
       </p>
 
-      <ol className="space-y-3">
+      <ol className="space-y-6 sm:space-y-8">
         {document.questions.map((question, index) => (
-          <QuestionPreview key={question.id} question={question} index={index} mode={mode} />
+          <QuestionPreview
+            key={question.id}
+            question={question}
+            index={index}
+            total={document.questions.length}
+            mode={mode}
+          />
         ))}
       </ol>
 
