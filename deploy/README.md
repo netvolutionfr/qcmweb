@@ -39,6 +39,12 @@ retour au code précédent ne défait pas un changement de schéma.
 
 ### 1. Sur le serveur
 
+Les chemins ci-dessous (`/opt/qcmweb`, utilisateur `deploy`) sont des exemples :
+n'importe quel dossier et n'importe quel nom d'utilisateur conviennent, y compris
+le dossier personnel de l'utilisateur (par exemple `/home/qcm`). `deploy.sh` déduit
+l'emplacement du dépôt de sa propre position ; il suffit que `authorized_keys`
+désigne son chemin réel, et que `DEPLOY_USER` porte le nom de cet utilisateur.
+
 ```bash
 # Utilisateur dédié. Le groupe docker équivaut à root : c'est pourquoi la clé
 # ci-dessous est restreinte à une seule commande.

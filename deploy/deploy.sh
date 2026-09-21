@@ -11,7 +11,10 @@
 #   - stdin    jeton éphémère du workflow, lecture seule sur les paquets
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/opt/qcmweb}"
+# Le script se trouve dans <dépôt>/deploy/ : le dépôt est son dossier parent. On
+# s'y repère plutôt que par un chemin écrit en dur, ce qui permet de le placer où
+# l'on veut (/opt, le dossier personnel de l'utilisateur de déploiement…).
+APP_DIR="${APP_DIR:-$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 die() { echo "deploy: $*" >&2; exit 2; }
 
