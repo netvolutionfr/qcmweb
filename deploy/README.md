@@ -94,13 +94,37 @@ Cette clé ne donne **aucun shell** : quoi qu'on lui demande, le serveur exécut
 `deploy.sh`, qui ne sait déployer qu'un commit précis. Une clé volée ne permet
 donc pas de prendre la machine.
 
-Empreinte du serveur, à relever depuis un réseau de confiance et à comparer à
-celle que donne `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` sur le
-serveur :
+Empreinte du serveur (`DEPLOY_KNOWN_HOSTS`). Elle permet au workflow de vérifier
+qu'il parle bien à **votre** serveur et pas à un intercepteur. Ce n'est pas la
+commande qu'on colle dans le secret, mais **ce qu'elle affiche** :
 
 ```bash
-ssh-keyscan -t ed25519 mon-serveur.example
+ssh-keyscan -t ed25519 mon-serveur.example 2>/dev/null
 ```
+
+`mon-serveur.example` est le nom (ou l'adresse) du serveur, **exactement** tel que
+vous le mettrez dans `DEPLOY_HOST`. La commande affiche une seule ligne :
+
+```
+mon-serveur.example ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMq3k8f9x2Qw7Hn1B0vZp…
+```
+
+C'est cette ligne, **entière**, qui va dans le secret. Elle est publique : rien de
+confidentiel, mais elle doit être exacte.
+
+`ssh-keyscan` fait confiance à qui répond. Pour être sûr de ne pas avoir pris
+l'empreinte d'un intercepteur, comparez ces deux résultats, qui doivent être
+identiques :
+
+```bash
+# sur votre poste
+ssh-keyscan -t ed25519 mon-serveur.example 2>/dev/null | ssh-keygen -lf -
+# sur le serveur
+ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+```
+
+Si SSH n'écoute pas sur le port 22, ajouter `-p <port>` à `ssh-keyscan` : la ligne
+commence alors par `[mon-serveur.example]:<port>`.
 
 ### 3. Dans GitHub
 
@@ -115,7 +139,7 @@ Secrets **de l'environnement `production`** :
 | `DEPLOY_HOST` | nom d'hôte ou adresse du serveur |
 | `DEPLOY_USER` | `deploy` |
 | `DEPLOY_SSH_KEY` | contenu **complet** du fichier `qcmweb-deploy` (clé privée) |
-| `DEPLOY_KNOWN_HOSTS` | la ligne rendue par `ssh-keyscan`, à l'identique |
+| `DEPLOY_KNOWN_HOSTS` | la ligne **affichée** par `ssh-keyscan` (voir ci-dessus), pas la commande |
 | `DEPLOY_PORT` | *optionnel* — seulement si SSH n'écoute pas sur 22 |
 
 Variable **de l'environnement** (non secrète) :
@@ -123,9 +147,6 @@ Variable **de l'environnement** (non secrète) :
 | Variable | Contenu |
 |---|---|
 | `PROD_URL` | `https://qcm.exemple.fr`, sans `/` final. Active la vérification publique après déploiement. |
-
-Hors port 22, `ssh-keyscan -p <port>` produit une ligne `[hôte]:port …` : c'est
-elle qu'il faut coller.
 
 Ces secrets ne donnent accès qu'au déploiement. `DEPLOY_HOST` est un secret
 parce que le dépôt est public, et que ses journaux le sont aussi.
