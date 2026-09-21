@@ -1,5 +1,9 @@
-# Plateforme QCM — Spécification fonctionnelle v0.4
+# Plateforme QCM — Spécification fonctionnelle v0.5
 
+> v0.5 — authentification durcie : compteurs de connexion par cible, sessions
+> révoquées à la rotation d'un credential, politique de mot de passe. Sections 3,
+> 4 et 17 révisées.
+>
 > v0.4 — authentification : mot de passe fixé et session pour l'enseignant,
 > clé d'API à scope pour l'agent. Passkeys reportées. Sections 3, 9, 17 et 22
 > révisées.
@@ -133,6 +137,12 @@ session : une lecture de la base ne doit pas suffire à usurper une session.
 
 Les tentatives de connexion sont limitées par adresse IP, et non globalement :
 un tiers ne doit pas pouvoir verrouiller l'enseignant hors de son propre outil.
+Ce compteur est **distinct** de celui des élèves, et une connexion réussie ne
+libère que le compteur de ce qu'elle prouve (ADR-0015).
+
+Le mot de passe est vérifié hors de l'exécuteur asynchrone, à concurrence
+bornée. Changer le mot de passe révoque toutes les sessions ouvertes. L'outil
+d'administration impose douze caractères au moins et masque la saisie.
 
 Les **passkeys** (WebAuthn) remplaceront ce mécanisme dans une version
 ultérieure. L'enjeu étant limité — un seul compte, aucune donnée nominative
@@ -217,7 +227,7 @@ les évaluations du groupe.
 
 L'enseignant doit pouvoir :
 
-- réinitialiser le secret d'un jeton ;
+- réinitialiser le secret d'un jeton, ce qui révoque les sessions qu'il a ouvertes ;
 - désactiver un jeton ;
 - transférer un jeton vers un autre groupe ;
 - purger un groupe en fin d'année.
@@ -854,7 +864,10 @@ Les principales règles sont :
 - façade MCP soumise aux mêmes autorisations que l'API REST ;
 - secrets d'authentification stockés sous forme d'empreinte, jamais en clair ;
 - sessions opaques côté serveur, cookie `HttpOnly` / `Secure` / `SameSite` ;
-- limitation des tentatives de connexion par adresse IP ;
+- limitation des tentatives par cible visée — mot de passe enseignant par
+  adresse, secret d'un participant par jeton et adresse — une réussite ne
+  libérant que son propre compteur ;
+- sessions révoquées à toute rotation de credential ;
 - clés d'API révocables individuellement et porteuses d'un scope ;
 - scope restreint pour les jetons d'agent, excluant participants et purge ;
 - transitions rendant un contenu visible aux élèves réservées à l'humain ;

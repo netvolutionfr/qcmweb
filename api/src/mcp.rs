@@ -15,7 +15,7 @@ use rmcp::model::{
     Implementation, InitializeResult, ListResourcesResult, PaginatedRequestParams, ProtocolVersion,
     ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult, Resource,
     ResourceContents, ServerCapabilities,
-    ServerInfo,
+    ServerConfig,
 };
 use rmcp::schemars;
 use rmcp::service::RequestContext;
@@ -221,7 +221,7 @@ impl QcmTools {
 
 #[tool_handler]
 impl ServerHandler for QcmTools {
-    fn get_info(&self) -> ServerInfo {
+    fn get_info(&self) -> ServerConfig {
         InitializeResult::new(
             ServerCapabilities::builder()
                 .enable_tools()

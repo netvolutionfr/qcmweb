@@ -138,6 +138,20 @@ Deux principaux, deux mécanismes, jamais interchangeables :
 
 Règles :
 
+- **Une réussite ne libère que le compteur de ce qu'elle prouve.** La clé d'un
+  `Throttle` est ce que l'on cherche à deviner : `IpAddr` pour le mot de passe
+  enseignant, `(jeton, adresse)` pour le secret d'un participant. Ne jamais
+  partager un compteur entre principaux, ni remettre à zéro celui d'une autre
+  cible : c'est ce qui permettait de tester des mots de passe sans limite. Le
+  quota se **réserve avant** la vérification (`admit`), il ne se compte pas après.
+- **Toute rotation de credential révoque les sessions qu'il a ouvertes.**
+  Participants : déclencheur en base. Enseignant : empreinte portée par la
+  session. Un nouveau champ de credential doit entrer dans l'un des deux.
+- **Jamais d'Argon2 dans un handler `async`** : `auth::verify_blocking`, qui
+  borne aussi la concurrence. Un flot de connexions ne doit ni geler l'exécuteur
+  ni multiplier les vérifications de vingt mégaoctets.
+- **La politique de mot de passe vit dans l'outil d'administration**, jamais dans
+  `hash_password`, qui hache aussi les secrets de participants, plus courts.
 - **Argon2id pour les mots de passe, SHA-256 pour les clés.** Un KDF ne sert
   qu'à ralentir la recherche exhaustive d'un secret *devinable* ; sur 256 bits
   aléatoires il ne ferait que coûter 100 ms par requête d'agent.

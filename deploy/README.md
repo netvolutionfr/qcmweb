@@ -68,6 +68,13 @@ Empreinte du mot de passe enseignant, à générer sur votre poste :
 cd api && cargo run -- hash-password
 ```
 
+La saisie est masquée et demandée deux fois ; douze caractères au moins, une
+phrase de passe de quelques mots convient très bien.
+
+**Changer le mot de passe** : générer une nouvelle empreinte, la remplacer dans
+le `.env` du serveur, puis redéployer ou redémarrer l'API. Toutes les sessions
+ouvertes avec l'ancien sont alors refusées.
+
 ### 2. La clé de déploiement
 
 Sur votre poste :

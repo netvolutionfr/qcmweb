@@ -11,6 +11,7 @@
 //! dans une version ultérieure.
 
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::net::IpAddr;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -71,15 +72,67 @@ pub fn verify_password(password: &str, phc: &str) -> Result<bool, AppError> {
 // Sessions
 // ---------------------------------------------------------------------------
 
-/// Crée une session et renvoie le jeton en clair — la seule et unique fois.
-pub async fn open_session(db: &PgPool) -> Result<String, AppError> {
+/// Empreinte des identifiants de l'enseignant.
+///
+/// Portée par chaque session d'enseignant. Changer le mot de passe ou
+/// l'identifiant change cette empreinte, et **toutes les sessions ouvertes
+/// jusque-là cessent d'être valides** : une session volée ne survit pas à la
+/// rotation du credential qu'elle a servi à obtenir.
+pub fn credential_fingerprint(username: &str, password_hash: &str) -> String {
+    // Le `\0` empêche qu'un déplacement de frontière entre les deux champs
+    // produise la même empreinte.
+    fingerprint(&format!("{username}\0{password_hash}"))
+}
+
+/// Crée une session d'enseignant et renvoie le jeton en clair — la seule et
+/// unique fois.
+pub async fn open_session(db: &PgPool, credential: &str) -> Result<String, AppError> {
     let token = random_secret();
-    sqlx::query("INSERT INTO sessions (token_hash, expires_at) VALUES ($1, $2)")
+    sqlx::query("INSERT INTO sessions (token_hash, expires_at, credential) VALUES ($1, $2, $3)")
         .bind(fingerprint(&token))
         .bind(time::OffsetDateTime::now_utc() + SESSION_TTL)
+        .bind(credential)
         .execute(db)
         .await?;
     Ok(token)
+}
+
+/// Supprime les sessions d'enseignant ouvertes sous d'anciens identifiants.
+///
+/// La validation les refuse déjà ; ceci évite de garder des lignes mortes trente
+/// jours après une rotation.
+pub async fn purge_stale_teacher_sessions(db: &PgPool, credential: &str) -> Result<u64, AppError> {
+    let done = sqlx::query(
+        "DELETE FROM sessions WHERE participant_id IS NULL AND credential IS DISTINCT FROM $1",
+    )
+    .bind(credential)
+    .execute(db)
+    .await?;
+    Ok(done.rows_affected())
+}
+
+/// Vérifie un mot de passe **hors de l'exécuteur asynchrone**, à concurrence
+/// bornée.
+///
+/// Argon2id occupe un cœur et une vingtaine de mégaoctets pendant la
+/// vérification. Dans un handler, il bloquerait un worker Tokio et gèlerait les
+/// autres requêtes ; sans borne, un flot de connexions ouvrirait autant de
+/// vérifications que de threads disponibles. Le sémaphore plafonne les deux.
+pub async fn verify_blocking(
+    state: &AppState,
+    password: &str,
+    phc: &str,
+) -> Result<bool, AppError> {
+    let _permit = state
+        .hashing
+        .acquire()
+        .await
+        .map_err(|_| AppError::Internal("file de hachage fermée"))?;
+
+    let (password, phc) = (password.to_owned(), phc.to_owned());
+    tokio::task::spawn_blocking(move || verify_password(&password, &phc))
+        .await
+        .map_err(|_| AppError::Internal("vérification interrompue"))?
 }
 
 pub async fn close_session(db: &PgPool, token: &str) -> Result<(), AppError> {
@@ -162,11 +215,16 @@ impl FromRequestParts<AppState> for Teacher {
 
         // `participant_id IS NULL` n'est pas un détail : sans cette clause, la
         // session d'un élève ouvrirait les routes enseignantes.
+        //
+        // `credential = $2` lie la session aux identifiants en vigueur : après un
+        // changement de mot de passe, les sessions d'avant sont refusées.
         let valid: Option<(uuid::Uuid,)> = sqlx::query_as(
             "SELECT id FROM sessions
-              WHERE token_hash = $1 AND expires_at > now() AND participant_id IS NULL",
+              WHERE token_hash = $1 AND expires_at > now()
+                AND participant_id IS NULL AND credential = $2",
         )
         .bind(fingerprint(&token))
+        .bind(&state.auth.credential)
         .fetch_optional(&state.db)
         .await?;
 
@@ -350,57 +408,125 @@ pub fn client_ip(peer: IpAddr, headers: &axum::http::HeaderMap, trusted: &[ipnet
         .unwrap_or(peer)
 }
 
-/// Fenêtre fixe par adresse IP sur l'endpoint de connexion (SPEC §17).
+/// Compteur de tentatives par clé, à fenêtre fixe (SPEC §17, ADR-0015).
 ///
-/// L'adresse est celle rendue par [`client_ip`], donc l'adresse réelle du
-/// client et non celle du reverse proxy.
+/// **La clé est ce que l'on cherche à deviner.** C'est le point qui compte : une
+/// réussite n'autorise à remettre à zéro que le compteur de la chose dont elle
+/// prouve la connaissance. Un compteur unique remis à zéro par n'importe quelle
+/// connexion réussie permettait à un élève, connecté sous son propre compte,
+/// d'effacer le quota qui protégeait le mot de passe de l'enseignant.
 ///
-/// ponytail: compteur en mémoire, remis à zéro au redémarrage et non partagé
+/// Le quota est **réservé avant** la vérification ([`Throttle::admit`]). Compter
+/// après laisserait passer autant d'essais que de requêtes simultanées.
+///
+/// ponytail: compteurs en mémoire, remis à zéro au redémarrage et non partagés
 /// entre instances. Suffisant pour une instance unique ; passer à Postgres ou
 /// Redis le jour où il y en a plusieurs.
-///
-/// Le comptage est par IP et non global : un attaquant ne doit pas pouvoir
-/// verrouiller l'enseignant hors de son propre outil.
-pub struct LoginLimiter {
-    attempts: Mutex<HashMap<IpAddr, (u32, Instant)>>,
+pub struct Throttle<K> {
+    hits: Mutex<HashMap<K, (u32, Instant)>>,
     max: u32,
     window: Duration,
 }
 
-impl LoginLimiter {
-    pub fn new() -> Self {
+impl<K: Eq + Hash + Clone> Throttle<K> {
+    pub fn new(max: u32, window: Duration) -> Self {
         Self {
-            attempts: Mutex::new(HashMap::new()),
-            max: 10,
-            window: Duration::from_secs(15 * 60),
+            hits: Mutex::new(HashMap::new()),
+            max,
+            window,
         }
     }
 
-    /// Enregistre une tentative. `false` si le quota est déjà épuisé.
-    pub fn allow(&self, ip: IpAddr) -> bool {
-        let mut map = self.attempts.lock().expect("mutex empoisonné");
-        let now = Instant::now();
+    /// Réserve une tentative. `false` si le quota de la clé est épuisé.
+    ///
+    /// Un refus ne prolonge pas la fenêtre : marteler un compteur déjà plein ne
+    /// doit pas repousser son déblocage.
+    pub fn admit(&self, key: &K) -> bool {
+        self.admit_at(key, Instant::now())
+    }
 
+    fn admit_at(&self, key: &K, now: Instant) -> bool {
+        let mut hits = self.hits.lock().expect("mutex empoisonné");
         // Purge opportuniste : évite que la table enfle sous une attaque
-        // distribuée. ponytail: O(n) à chaque tentative, négligeable tant que
-        // le trafic de connexion reste celui d'un enseignant.
-        map.retain(|_, (_, started)| now.duration_since(*started) < self.window);
+        // distribuée. ponytail: O(n) à chaque appel, négligeable tant que le
+        // trafic de connexion reste celui d'une classe.
+        hits.retain(|_, (_, start)| now.duration_since(*start) < self.window);
 
-        let entry = map.entry(ip).or_insert((0, now));
-        if now.duration_since(entry.1) >= self.window {
-            *entry = (0, now);
+        let entry = hits.entry(key.clone()).or_insert((0, now));
+        if entry.0 >= self.max {
+            return false;
         }
         entry.0 += 1;
-        entry.0 <= self.max
+        true
     }
 
-    /// Une connexion réussie efface le compteur.
-    pub fn reset(&self, ip: IpAddr) {
-        self.attempts.lock().expect("mutex empoisonné").remove(&ip);
+    /// Le quota de la clé est-il épuisé ? Ne modifie rien.
+    pub fn blocked(&self, key: &K) -> bool {
+        let now = Instant::now();
+        self.hits
+            .lock()
+            .expect("mutex empoisonné")
+            .get(key)
+            .is_some_and(|(n, start)| now.duration_since(*start) < self.window && *n >= self.max)
+    }
+
+    /// Enregistre une tentative sans en vérifier le quota.
+    ///
+    /// Pour les compteurs qui ne comptent que les échecs et se consultent avant
+    /// (`blocked`) : ils n'ont pas de « réussite » qui les libère.
+    pub fn record(&self, key: K) {
+        let now = Instant::now();
+        let mut hits = self.hits.lock().expect("mutex empoisonné");
+        hits.retain(|_, (_, start)| now.duration_since(*start) < self.window);
+        let entry = hits.entry(key).or_insert((0, now));
+        entry.0 = entry.0.saturating_add(1);
+    }
+
+    /// Remet à zéro la clé. À n'appeler que si la réussite **prouve la
+    /// connaissance du secret de cette clé** : jamais sur un compteur partagé
+    /// avec d'autres comptes.
+    pub fn clear(&self, key: &K) {
+        self.hits.lock().expect("mutex empoisonné").remove(key);
     }
 }
 
-impl Default for LoginLimiter {
+/// Les compteurs de connexion, de types volontairement distincts.
+///
+/// Les clés n'ont pas le même type : impossible de remettre à zéro le quota de
+/// l'enseignant depuis le parcours élève, ou l'inverse. Le partage qui rendait le
+/// contournement possible n'est plus exprimable.
+///
+/// Il n'y a volontairement **pas** de compteur sur les jetons inconnus. Un jeton
+/// fait environ 39 bits pour une trentaine de valides : l'énumérer est hors de
+/// portée, et un jeton identifie sans authentifier. En revanche un tel compteur,
+/// par adresse, aurait permis à un seul élève de verrouiller toute la classe
+/// derrière la même adresse hors de l'épreuve (ADR-0015).
+pub struct Throttles {
+    /// Essais sur le mot de passe de l'enseignant, par adresse.
+    ///
+    /// Par adresse et non global : un tiers ne doit pas pouvoir verrouiller
+    /// l'enseignant hors de son propre outil.
+    pub teacher: Throttle<IpAddr>,
+    /// Essais sur le secret d'un participant, par (jeton, adresse).
+    ///
+    /// Par jeton : ce que l'on protège est ce secret-là, et seule sa
+    /// connaissance permet de libérer son compteur. Avec l'adresse : un tiers
+    /// qui connaît un jeton ne peut pas en verrouiller le propriétaire depuis
+    /// un autre poste.
+    pub student: Throttle<(String, IpAddr)>,
+}
+
+impl Throttles {
+    pub fn new() -> Self {
+        let window = Duration::from_secs(15 * 60);
+        Self {
+            teacher: Throttle::new(10, window),
+            student: Throttle::new(10, window),
+        }
+    }
+}
+
+impl Default for Throttles {
     fn default() -> Self {
         Self::new()
     }
@@ -440,40 +566,142 @@ mod tests {
         assert!(r.is_err(), "un hash invalide doit échouer, jamais accepter");
     }
 
-    #[test]
-    fn limiteur_bloque_apres_le_quota() {
-        let limiter = LoginLimiter::new();
-        let ip: IpAddr = "192.0.2.1".parse().unwrap();
-        for i in 1..=10 {
-            assert!(limiter.allow(ip), "tentative {i} devrait passer");
-        }
-        assert!(!limiter.allow(ip), "la 11e doit être refusée");
+    fn ip(s: &str) -> IpAddr {
+        s.parse().unwrap()
+    }
+
+    fn quinze_minutes() -> Duration {
+        Duration::from_secs(15 * 60)
     }
 
     #[test]
-    fn limiteur_isole_les_adresses() {
-        let limiter = LoginLimiter::new();
-        let attaquant: IpAddr = "192.0.2.1".parse().unwrap();
-        let enseignant: IpAddr = "192.0.2.2".parse().unwrap();
+    fn throttle_bloque_apres_le_quota() {
+        let t = Throttle::new(10, quinze_minutes());
+        let k = ip("192.0.2.1");
+        for i in 1..=10 {
+            assert!(t.admit(&k), "tentative {i} devrait passer");
+        }
+        assert!(!t.admit(&k), "la 11e doit être refusée");
+    }
 
+    #[test]
+    fn throttle_isole_les_cles() {
+        let t = Throttle::new(10, quinze_minutes());
+        let attaquant = ip("192.0.2.1");
+        let enseignant = ip("192.0.2.2");
         for _ in 0..20 {
-            limiter.allow(attaquant);
+            t.admit(&attaquant);
         }
         assert!(
-            limiter.allow(enseignant),
+            t.admit(&enseignant),
             "l'enseignant ne doit pas être verrouillé par un tiers"
         );
     }
 
+    /// Le contournement d'origine : un élève réussissait sa propre connexion et
+    /// effaçait le quota qui protégeait un autre compte.
     #[test]
-    fn connexion_reussie_efface_le_compteur() {
-        let limiter = LoginLimiter::new();
-        let ip: IpAddr = "192.0.2.3".parse().unwrap();
+    fn reussir_sur_une_cle_ne_libere_pas_une_autre() {
+        let t: Throttle<(String, IpAddr)> = Throttle::new(10, quinze_minutes());
+        let poste = ip("192.0.2.7");
+        let victime = ("VICTIME1".to_string(), poste);
+        let attaquant = ("ATTAQUANT".to_string(), poste);
+
         for _ in 0..10 {
-            limiter.allow(ip);
+            t.admit(&victime);
         }
-        limiter.reset(ip);
-        assert!(limiter.allow(ip));
+        assert!(t.blocked(&victime));
+
+        // L'attaquant se connecte à son propre compte depuis la même adresse.
+        t.admit(&attaquant);
+        t.clear(&attaquant);
+
+        assert!(
+            t.blocked(&victime),
+            "la connexion de l'attaquant ne doit pas libérer le compteur de la victime"
+        );
+        assert!(!t.admit(&victime));
+    }
+
+    #[test]
+    fn clear_libere_sa_propre_cle() {
+        let t = Throttle::new(10, quinze_minutes());
+        let k = ip("192.0.2.3");
+        for _ in 0..10 {
+            t.admit(&k);
+        }
+        t.clear(&k);
+        assert!(t.admit(&k), "réussir sur sa propre clé la libère");
+    }
+
+    #[test]
+    fn blocked_ne_consomme_rien() {
+        let t = Throttle::new(3, quinze_minutes());
+        let k = ip("192.0.2.4");
+        for _ in 0..100 {
+            assert!(!t.blocked(&k));
+        }
+        assert!(t.admit(&k) && t.admit(&k) && t.admit(&k), "le quota est intact");
+    }
+
+    #[test]
+    fn record_puis_blocked() {
+        let t = Throttle::new(3, quinze_minutes());
+        let k = ip("192.0.2.5");
+        for _ in 0..2 {
+            t.record(k);
+        }
+        assert!(!t.blocked(&k));
+        t.record(k);
+        assert!(t.blocked(&k));
+    }
+
+    #[test]
+    fn la_fenetre_expire_et_un_refus_ne_la_prolonge_pas() {
+        let t = Throttle::new(2, Duration::from_secs(60));
+        let k = ip("192.0.2.6");
+        let t0 = Instant::now();
+
+        assert!(t.admit_at(&k, t0));
+        assert!(t.admit_at(&k, t0 + Duration::from_secs(10)));
+        assert!(!t.admit_at(&k, t0 + Duration::from_secs(30)));
+        // Un refus tardif ne repousse pas la libération.
+        assert!(!t.admit_at(&k, t0 + Duration::from_secs(59)));
+        assert!(
+            t.admit_at(&k, t0 + Duration::from_secs(60)),
+            "la fenêtre court depuis la première tentative"
+        );
+    }
+
+    /// Le quota est réservé avant la vérification : cent requêtes simultanées
+    /// ne doivent pas obtenir plus d'essais que le quota.
+    #[test]
+    fn reservation_atomique_sous_concurrence() {
+        use std::sync::Arc;
+        let t = Arc::new(Throttle::new(10, quinze_minutes()));
+        let k = ip("192.0.2.9");
+
+        let admis: usize = (0..100)
+            .map(|_| {
+                let t = Arc::clone(&t);
+                std::thread::spawn(move || t.admit(&k))
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|h| h.join().unwrap() as usize)
+            .sum();
+
+        assert_eq!(admis, 10);
+    }
+
+    #[test]
+    fn empreinte_d_identifiants_sensible_a_chaque_champ() {
+        let base = credential_fingerprint("enseignant", "$argon2id$hash-a");
+        assert_eq!(base, credential_fingerprint("enseignant", "$argon2id$hash-a"));
+        assert_ne!(base, credential_fingerprint("enseignant", "$argon2id$hash-b"));
+        assert_ne!(base, credential_fingerprint("autre", "$argon2id$hash-a"));
+        // Le séparateur interdit qu'un déplacement de frontière collisionne.
+        assert_ne!(credential_fingerprint("ab", "c"), credential_fingerprint("a", "bc"));
     }
 
     fn headers(xff: Option<&str>) -> axum::http::HeaderMap {

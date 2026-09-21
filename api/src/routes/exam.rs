@@ -120,9 +120,6 @@ async fn login(
     Json(creds): Json<TokenCredentials>,
 ) -> Result<impl IntoResponse, AppError> {
     let ip = auth::client_ip(peer.ip(), &headers, &state.trusted_proxies);
-    if !state.limiter.allow(ip) {
-        return Err(AppError::TooManyRequests);
-    }
 
     // Saisie normalisée : minuscules, tiret oublié ou mal placé. Refuser ces
     // saisies serait une mauvaise façon d'imposer un format que nous avons
@@ -143,19 +140,23 @@ async fn login(
         return Err(AppError::Unauthorized);
     };
 
-    let secret_matches = {
-        let hash = hash.clone();
-        tokio::task::spawn_blocking(move || auth::verify_password(&secret, &hash))
-            .await
-            .map_err(|_| AppError::Internal("vérification interrompue"))??
-    };
+    // Le compteur porte sur ce secret-là, depuis cette adresse. Réservé avant
+    // la vérification, pour que des essais simultanés ne dépassent pas le quota.
+    let attempts = (token, ip);
+    if !state.throttles.student.admit(&attempts) {
+        tracing::warn!(%ip, "connexion élève : quota de tentatives dépassé");
+        return Err(AppError::TooManyRequests);
+    }
 
-    if !secret_matches {
+    if !auth::verify_blocking(&state, &secret, &hash).await? {
         tracing::warn!(%ip, "connexion élève refusée : secret invalide");
         return Err(AppError::Unauthorized);
     }
 
-    state.limiter.reset(ip);
+    // Réussir prouve la connaissance de CE secret, et de lui seul : on ne libère
+    // que ce compteur. Libérer un compteur commun à toute l'adresse permettait
+    // à un élève d'effacer le quota protégeant les comptes des autres.
+    state.throttles.student.clear(&attempts);
     let session = auth::open_participant_session(&state.db, id).await?;
 
     Ok((

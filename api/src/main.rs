@@ -16,7 +16,7 @@ use sqlx::postgres::PgPoolOptions;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
 
-use crate::auth::LoginLimiter;
+use crate::auth::Throttles;
 use crate::config::Config;
 use crate::state::AppState;
 
@@ -56,6 +56,14 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => tracing::warn!(error = %e, "purge des sessions impossible"),
     }
 
+    // Rotation du mot de passe enseignant : les sessions ouvertes sous l'ancien
+    // sont refusées par la validation, on retire aussi leurs lignes.
+    match auth::purge_stale_teacher_sessions(&db, &config.auth.credential).await {
+        Ok(n) if n > 0 => tracing::warn!(count = n, "sessions enseignant d'anciens identifiants révoquées"),
+        Ok(_) => {}
+        Err(e) => tracing::warn!(error = %e, "purge des sessions obsolètes impossible"),
+    }
+
     if config.trusted_proxies.is_empty() {
         tracing::warn!(
             "TRUSTED_PROXY_CIDRS vide : X-Forwarded-For sera ignoré. \
@@ -69,7 +77,8 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     let state = AppState {
         db,
         auth: Arc::new(config.auth.clone()),
-        limiter: Arc::new(LoginLimiter::new()),
+        throttles: Arc::new(Throttles::new()),
+        hashing: Arc::new(tokio::sync::Semaphore::new(hashing_permits())),
         trusted_proxies: Arc::new(config.trusted_proxies.clone()),
     };
 
@@ -89,6 +98,15 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     .await?;
 
     Ok(())
+}
+
+/// Vérifications Argon2 simultanées autorisées : autant que de cœurs, au plus
+/// quatre. Chacune coûte environ vingt mégaoctets.
+fn hashing_permits() -> usize {
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(2)
+        .clamp(1, 4)
 }
 
 async fn shutdown() {

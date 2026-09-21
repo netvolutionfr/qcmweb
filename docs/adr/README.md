@@ -27,7 +27,7 @@ sans alternative sérieuse, ou une décision déjà argumentée dans [SPEC.md](.
 | [0001](0001-pseudonymisation-par-jetons.md) | Pseudonymisation par jetons, aucune donnée nominative hébergée | Acceptée |
 | [0002](0002-jetons-stables-a-l-annee.md) | Jetons stables sur l'année scolaire | Acceptée |
 | [0003](0003-administration-par-facade-mcp.md) | Administration par façade MCP plutôt qu'interface complète | Acceptée |
-| [0004](0004-mot-de-passe-enseignant.md) | Mot de passe fixé pour l'enseignant, passkeys reportées | Acceptée (provisoire) |
+| [0004](0004-mot-de-passe-enseignant.md) | Mot de passe fixé pour l'enseignant, passkeys reportées | Acceptée (provisoire), précisée par 0015 |
 | [0005](0005-cle-api-et-choix-du-hachage.md) | Clé d'API pour l'agent, et SHA-256 plutôt qu'Argon2id | Acceptée |
 | [0006](0006-serde-norway.md) | `serde_norway` plutôt que `serde_yaml` | Acceptée |
 | [0007](0007-format-des-codes.md) | Format et entropie des codes recopiés à la main | Acceptée |
@@ -38,3 +38,4 @@ sans alternative sérieuse, ou une décision déjà argumentée dans [SPEC.md](.
 | [0012](0012-tentatives.md) | Tentatives : fuite impossible à écrire, mélange déterministe | Acceptée |
 | [0013](0013-agregation-des-resultats.md) | Résultats : meilleure copie, absents visibles, jointure locale | Acceptée |
 | [0014](0014-deploiement-continu.md) | Déploiement continu : images en CI, clé SSH à commande forcée | Acceptée |
+| [0015](0015-authentification-durcie.md) | Compteurs par cible, sessions révoquées à la rotation, Argon2 borné | Acceptée |

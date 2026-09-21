@@ -27,6 +27,8 @@ pub struct Config {
 pub struct AuthConfig {
     pub username: String,
     pub password_hash: String,
+    /// Empreinte des identifiants ci-dessus, portée par les sessions ouvertes.
+    pub credential: String,
 }
 
 // Écrit à la main : un `derive(Debug)` ferait fuir l'empreinte du mot de passe
@@ -36,6 +38,7 @@ impl std::fmt::Debug for AuthConfig {
         f.debug_struct("AuthConfig")
             .field("username", &self.username)
             .field("password_hash", &"<masqué>")
+            .field("credential", &"<masqué>")
             .finish()
     }
 }
@@ -45,9 +48,15 @@ impl Config {
         Ok(Self {
             database_url: required("DATABASE_URL")?,
             bind_addr: env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:3000".into()),
-            auth: AuthConfig {
-                username: required("TEACHER_USERNAME")?,
-                password_hash: required("TEACHER_PASSWORD_HASH")?,
+            auth: {
+                let username = required("TEACHER_USERNAME")?;
+                let password_hash = required("TEACHER_PASSWORD_HASH")?;
+                let credential = crate::auth::credential_fingerprint(&username, &password_hash);
+                AuthConfig {
+                    username,
+                    password_hash,
+                    credential,
+                }
             },
             trusted_proxies: trusted_proxies()?,
         })

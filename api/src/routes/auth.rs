@@ -55,7 +55,10 @@ async fn login(
     Json(creds): Json<Credentials>,
 ) -> Result<impl IntoResponse, AppError> {
     let ip = auth::client_ip(peer.ip(), &headers, &state.trusted_proxies);
-    if !state.limiter.allow(ip) {
+
+    // Le quota est réservé avant la vérification : compter après laisserait
+    // passer autant d'essais que de requêtes simultanées.
+    if !state.throttles.teacher.admit(&ip) {
         tracing::warn!(%ip, "connexion : quota de tentatives dépassé");
         return Err(AppError::TooManyRequests);
     }
@@ -63,15 +66,19 @@ async fn login(
     // Le mot de passe est vérifié même lorsque l'identifiant est faux, pour que
     // la durée de la réponse ne révèle pas lequel des deux est en cause.
     let user_ok = creds.username == state.auth.username;
-    let pass_ok = auth::verify_password(&creds.password, &state.auth.password_hash)?;
+    let pass_ok =
+        auth::verify_blocking(&state, &creds.password, &state.auth.password_hash).await?;
 
     if !(user_ok && pass_ok) {
         tracing::warn!(%ip, "connexion refusée");
         return Err(AppError::Unauthorized);
     }
 
-    state.limiter.reset(ip);
-    let token = auth::open_session(&state.db).await?;
+    // Réussir prouve que l'on connaît le mot de passe de l'enseignant : le
+    // quota de cette adresse peut être libéré. C'est le seul endroit où ce
+    // compteur est remis à zéro — jamais depuis une autre connexion.
+    state.throttles.teacher.clear(&ip);
+    let token = auth::open_session(&state.db, &state.auth.credential).await?;
     tracing::info!(%ip, "session ouverte");
 
     Ok((

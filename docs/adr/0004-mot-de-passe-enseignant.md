@@ -1,6 +1,6 @@
 # ADR-0004 — Mot de passe fixé pour l'enseignant, passkeys reportées
 
-**Statut** : Acceptée (provisoire) — 2026-09-20
+**Statut** : Acceptée (provisoire) — 2026-09-20. La limitation des tentatives est précisée par [ADR-0015](0015-authentification-durcie.md).
 **Cible** : remplacement par WebAuthn/passkeys, ADR à rédiger le moment venu.
 
 ## Contexte
