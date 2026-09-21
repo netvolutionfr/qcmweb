@@ -230,6 +230,17 @@ Nginx tournant sur l'hôte, il atteint le conteneur par la passerelle du pont
 Docker. Le sous-réseau relevé ci-dessus est donc la valeur à déclarer, par
 exemple `172.18.0.0/16`.
 
+**Au tout premier démarrage**, ce réseau n'existe pas encore, et Compose refuse de
+démarrer si la variable est vide. Commencer par `172.16.0.0/12`, la plage où
+Docker crée ses réseaux privés. C'est une valeur raisonnable à garder : le port de
+l'API n'est publié que sur la boucle locale, donc seuls des processus de la
+machine peuvent l'atteindre.
+
+Une valeur plus étroite (le sous-réseau relevé ci-dessus) est plus stricte, mais
+fragile : `docker compose down` supprime le réseau, et le `up` suivant peut lui
+donner un autre sous-réseau. L'erreur ne se voit alors pas au démarrage, mais dans
+le journal : toutes les connexions y portent l'adresse de la passerelle.
+
 Vérification après démarrage — l'adresse journalisée doit être celle du client,
 pas celle de la passerelle :
 
