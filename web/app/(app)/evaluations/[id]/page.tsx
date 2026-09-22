@@ -18,7 +18,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const STANDING = {
@@ -222,7 +221,12 @@ export default function Resultats({ params }: { params: Promise<{ id: string }> 
             <Upload className="size-4 shrink-0" />
             {names ? `${names.size} correspondances chargées` : "Charger ma table de correspondance"}
           </Label>
-          <Input
+          {/* Champ natif, pas le composant Input : ses classes de base (dont
+             `w-full`) l'emportent sur `sr-only` dans la feuille compilée — même
+             spécificité, `w-full` déclaré après — et un champ en position:absolute
+             hérite alors d'une largeur de 100 % du viewport plutôt que de 1px,
+             provoquant un débordement horizontal invisible mais bien réel. */}
+          <input
             id="corr"
             type="file"
             accept=".csv,text/csv,text/plain"

@@ -191,7 +191,12 @@ export default function Billets() {
             <Upload className="size-4 shrink-0" />
             {fileName || "Choisir un fichier CSV"}
           </Label>
-          <Input
+          {/* Champ natif, pas le composant Input : ses classes de base (dont
+             `w-full`) l'emportent sur `sr-only` dans la feuille compilée — même
+             spécificité, `w-full` déclaré après — et un champ en position:absolute
+             hérite alors d'une largeur de 100 % du viewport plutôt que de 1px,
+             provoquant un débordement horizontal invisible mais bien réel. */}
+          <input
             id="roster"
             type="file"
             accept=".csv,text/csv,text/plain"
