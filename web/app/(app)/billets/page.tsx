@@ -146,7 +146,15 @@ export default function Billets() {
         <CardContent className="space-y-4">
           <Select value={groupId} onValueChange={(value) => setGroupId(value ?? "")}>
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Sélectionner un groupe" />
+              {/* Base UI n'affiche le libellé d'un item qu'avec la prop `items` sur
+                  `Select.Root`, ou — comme ici — une fonction de rendu sur `Value` :
+                  sans elle, il affiche la valeur brute, c'est-à-dire l'UUID du groupe. */}
+              <SelectValue placeholder="Sélectionner un groupe">
+                {() => {
+                  const g = groups.find((g) => g.id === groupId);
+                  return g ? `${g.label} · ${g.school_year}` : "Sélectionner un groupe";
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {groups.map((g) => (
