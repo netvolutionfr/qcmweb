@@ -173,6 +173,8 @@ Déploiement visé : Debian Trixie, Docker, Nginx en frontal pour TLS — voir
 
 ## Documentation
 
+- [docs/guide-enseignant.md](docs/guide-enseignant.md) — prise en main pas à pas, captures d'écran, pour un enseignant.
+- [docs/guide-eleve.md](docs/guide-eleve.md) — prise en main pas à pas, captures d'écran, pour un élève.
 - [SPEC.md](SPEC.md) — spécification fonctionnelle complète, référence du projet.
 - [CLAUDE.md](CLAUDE.md) — invariants et règles d'ingénierie, à lire avant de contribuer.
 - [docs/adr/](docs/adr/) — décisions d'architecture et leurs raisons.
